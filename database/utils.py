@@ -14,7 +14,7 @@ import qrtutils
 from database.const import CONFIG_PATH, MODULE_NAME
 from qrtconst import REL_PATH_HEADER
 
-def submodule_initialization(db_name, path):
+def submodule_initialization(db_name, path, submod_depth=1):
     '''
     对子模块根据配置进行初始化设置
     
@@ -25,6 +25,10 @@ def submodule_initialization(db_name, path):
     path: string
         调用模块所在文件夹的路径，通常为dirname(__file__)，用于将相对路径转化为绝对路径，
         此处假设子模块文件夹的母文件夹为主模块文件夹
+    submod_depth: int, default 1
+        子模块在模块文件夹的深度(在获取主模块文件夹路径时使用)
+        例如: 主模块文件夹为c:/main_module，子模块文件夹为c:/main_module/sub_module
+        则此时submod_depth=1，以此类推
     
     Return
     ------
@@ -40,7 +44,7 @@ def submodule_initialization(db_name, path):
         db_config['log']['name'] = MODULE_NAME
         log_path = db_config['log']['log_path']
         if log_path.startswith(REL_PATH_HEADER):  # 相对路径转绝对路径
-            module_path = sep.join(path.split(sep)[:-1])
+            module_path = sep.join(path.split(sep)[:-submod_depth])
             log_path = qrtutils.relpath2abs(module_path, log_path)
     else:
         db_config['log']['name'] = MODULE_NAME + '.' + db_name

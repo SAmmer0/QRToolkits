@@ -30,7 +30,9 @@
         // string dtype of date, which would be used in numpy.array to convert date strings
         "date_dtype": "S20",
         // string dtype of symbol, which would be used in numpy.array to convert symbol strings
-        "symbol_dtype": "S20"
+        "symbol_dtype": "S20",
+        // format of time data in database
+        "db_time_format": "%Y%m%d"
     },
     "log": {
         // whether enable the database module log
