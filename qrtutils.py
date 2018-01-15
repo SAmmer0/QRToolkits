@@ -15,15 +15,16 @@ import pdb
 
 from qrtconst import REL_PATH_HEADER_LEN
 
+
 def parse_config(config_path):
     '''
     对配置文件进行解析
-    
+
     Parameter
     ---------
     config_path: string
         配置文件所在的路径
-    
+
     Return
     ------
     out: dict
@@ -35,15 +36,16 @@ def parse_config(config_path):
         config = trans_config_pathes(config)
         return config
 
+
 def trans_config_sep(path):
     '''
     检测系统路径分隔符是否为'/'，如果不是则将自定义的路径分隔符转换为系统分隔符
-    
+
     Parameter
     ---------
     path: string
         需要被转换的路径，可以是绝对路径，也可以是相对路径
-    
+
     Return
     ------
     out_path: string
@@ -53,15 +55,16 @@ def trans_config_sep(path):
         path = path.replace('/', sep)
     return path
 
+
 def trans_config_pathes(config):
     '''
     递归将所有配置的路径转化为系统分隔符模式
-    
+
     Parameter
     ---------
     config: dict
         配置文件
-    
+
     Return
     ------
     out_config: dict
@@ -75,19 +78,19 @@ def trans_config_pathes(config):
             if 'path' in k:
                 out_config[k] = trans_config_sep(v)
     return out_config
-            
+
 
 def relpath2abs(parent_folder, rel_path):
     '''
     将相对路径转换为绝对路径
-    
+
     Parameter
     ---------
     parent_folder: string
         母文件夹的绝对路径
     rel_path: string
         相对路径，以'./'开头的被视为相对路径
-    
+
     Return
     ------
     path: string
@@ -95,6 +98,30 @@ def relpath2abs(parent_folder, rel_path):
     '''
     rel_path = trans_config_sep(rel_path)
     return join(parent_folder, rel_path[REL_PATH_HEADER_LEN:])
+
+
+def debug_wrapper(logger):
+    '''
+    装饰器，用于向给定日志中打印相关调用和参数信息
+
+    Parameter
+    ---------
+    logger: logging.Logger
+        日志句柄
+
+    Return
+    ------
+    wrapper: function
+        装饰后的函数
+    '''
+    def wrapper(func):
+        def inner(*args, **kwargs):
+            logger.debug('call ' + func.__name__ + ' with args = ' +
+                         repr(args) + ', kwargs = ' + repr(kwargs))
+            return func(*args, **kwargs)
+        return inner
+    return wrapper
+
 
 if __name__ == '__main__':
     config = parse_config(r'E:\QRToolkits\database\config.json')

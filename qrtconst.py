@@ -9,3 +9,6 @@ from os import sep
 # 相对路径开头
 REL_PATH_HEADER = '.' + sep
 REL_PATH_HEADER_LEN = len(REL_PATH_HEADER)
+
+# Not a String
+NaS = 'Not a String'
