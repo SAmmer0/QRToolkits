@@ -7,12 +7,20 @@ Created on Thu Jan 11 16:54:58 2018
 
 
 from os.path import dirname
+import enum
 
 from database.utils import submodule_initialization, set_logger
-from database.const import PANEL, TIME_SERIES
+from database.const import DataCate, NaS
 
 SUBMODULE_NAME = 'HDF5'
 # 设置日志选项
 DB_CONFIG = submodule_initialization(SUBMODULE_NAME, dirname(__file__))
 
 LOGGER_NAME = set_logger(DB_CONFIG['log'])
+
+# 数据文件填充状态
+
+
+class FilledStatus(enum.Enum):
+    FILLED = enum.auto()
+    EMPTY = enum.auto()

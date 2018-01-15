@@ -6,8 +6,9 @@ Created on Wed Jan 10 15:18:54 2018
 """
 
 from os.path import dirname, join
+import enum
 
-from qrtconst import REL_PATH_HEADER, REL_PATH_HEADER_LEN
+from qrtconst import REL_PATH_HEADER, REL_PATH_HEADER_LEN, NaS
 from qrtutils import trans_config_sep
 
 CONFIG_PATH = './config.json'
@@ -20,5 +21,8 @@ if CONFIG_PATH.startswith(REL_PATH_HEADER):
 MODULE_NAME = 'qrt_database'
 
 # 数据分类: 时间序列数据、面板数据
-PANEL = 'panel'
-TIME_SERIES = 'time series'
+
+
+class DataCate(enum.Enum):
+    PANEL = enum.auto()
+    TIME_SERIES = enum.auto()
