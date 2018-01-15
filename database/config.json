@@ -1,6 +1,8 @@
 {
 // database configuration
     "HDF5": {
+        // Warning: HDF5 database is designed to store numerical data, any setting related
+        // to string like data may lead to unpredictable outcome.
         // supported data type, "i" for int and "f" for float
         "valid_type_header": ["i", "f"],
         // column size in an initial data file
@@ -8,7 +10,7 @@
         // if the data column size exceeds the file column size, the data file should be resized
         // (to make database more efficient), which is done by increase the data column size by
         // "col_size_increase_step", this operation will delete origin data file and generate a
-        // new data file
+        // new data file(the program should be authorized properly)
         "col_size_increase_step": 1000,
         // default data type
         "default_data_type": "float64",
@@ -16,7 +18,7 @@
             // whether the database use an independent log file
             "enable_log": true,
             // log is save to file, otherwise log will be printed
-            "log_to_file": false,
+            "log_to_file": true,
             // log path where the log file is saved, starting with "./" means relative path
             // Warning: in configuration file separator is "/"
             "log_path": "./hdfdb_log.log",

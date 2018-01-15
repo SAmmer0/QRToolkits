@@ -8,12 +8,18 @@ Created on Thu Jan 11 14:53:33 2018
 
 """
 import abc
+import logging
 
 import pandas as pd
 import h5py
 import numpy as np
 
-from database.hdf5db.const import PANEL, TIME_SERIES
+from database.hdf5db.const import LOGGER_NAME, DB_CONFIG, DataCate, FilledStatus, NaS
+from qrtutils import debug_wrapper
+from database.hdf5db.exceptions import InvalidInputTypeError, UnsupportDataTypeError
+
+# 获取当前日志句柄
+logger = logging.getLogger(LOGGER_NAME)
 
 
 class DataIndex(object, metaclass=abc.ABCMeta):
@@ -92,6 +98,7 @@ class TimeIndex(DataIndex):
         self._data = None
 
     @classmethod
+    @debug_wrapper(logger)
     def init_from_dataset(cls, date_dset):
         '''
         使用数据集对象对TimeIndex进行初始化
@@ -115,6 +122,7 @@ class TimeIndex(DataIndex):
         return obj
 
     @classmethod
+    @debug_wrapper(logger)
     def init_from_index(cls, pd_index):
         '''
         使用索引对象对TimeIndex进行初始化
@@ -136,6 +144,7 @@ class TimeIndex(DataIndex):
         obj._end_time = pd_index[-1]
         return obj
 
+    @debug_wrapper(logger)
     def to_bytes(self, dtype, date_fmt):
         '''
         将索引数据对象转化为二进制字符串序列
@@ -152,7 +161,7 @@ class TimeIndex(DataIndex):
         dates: np.array
         '''
         if not dtype.lower().startswith('s'):
-            raise ValueError("Wrong dtype for date string, given {}".format(dtype))
+            raise InvalidInputTypeError("Wrong dtype for date string, given {}".format(dtype))
         out = self._data.strftime(date_fmt).astype(dtype)
         return out
 
@@ -186,6 +195,7 @@ class SymbolIndex(DataIndex):
         self._length = None
 
     @classmethod
+    @debug_wrapper(logger)
     def init_from_dataset(cls, symbol_dset):
         '''
         使用数据集对象对SymbolIndex进行初始化
@@ -206,6 +216,7 @@ class SymbolIndex(DataIndex):
         return obj
 
     @classmethod
+    @debug_wrapper(logger)
     def init_from_index(cls, pd_index):
         '''
         使用索引对象对SymbolIndex进行初始化
@@ -224,6 +235,7 @@ class SymbolIndex(DataIndex):
         obj._length = len(pd_index)
         return obj
 
+    @debug_wrapper(logger)
     def to_bytes(self, dtype):
         '''
         将索引数据对象转化为二进制字符串序列
@@ -238,7 +250,7 @@ class SymbolIndex(DataIndex):
         dates: np.array
         '''
         if not dtype.lower().startswith('s'):
-            raise ValueError("Wrong dtype for date string, given {}".format(dtype))
+            raise InvalidInputTypeError("Wrong dtype for date string, given {}".format(dtype))
         out = np.array(self._data, dtype=dtype)
         return out
 
@@ -270,6 +282,7 @@ class Data(object):
         self._data = None
 
     @classmethod
+    @debug_wrapper(logger)
     def init_from_pd(cls, pd_data):
         '''
         使用(排序后的)pd.DataFrame(或者pd.Series)对数据进行初始化
@@ -287,16 +300,17 @@ class Data(object):
         '''
         obj = cls()
         if isinstance(pd_data, pd.DataFrame):
-            obj._data_category = PANEL
+            obj._data_category = DataCate.PANEL
         elif isinstance(pd_data, pd.Series):
-            obj._data_category = TIME_SERIES
+            obj._data_category = DataCate.TIME_SERIES
         else:
-            raise ValueError("Only pd.DataFrame or pd.Series is allowed, you provide {}".
-                             format(type(pd_data)))
+            raise UnsupportDataTypeError("Only pd.DataFrame or pd.Series is allowed, you provide {}".
+                                         format(type(pd_data)))
         obj._data = pd_data.sort_index()
         return obj
 
     @classmethod
+    @debug_wrapper(logger)
     def init_from_datasets(cls, data_dset, date_dset, symbol_dset=None):
         '''
         使用数据集数据对对象进行初始化
@@ -318,16 +332,17 @@ class Data(object):
         obj = cls()
         date_index = TimeIndex.init_from_dataset(date_dset)
         if symbol_dset is not None:
-            obj._data_category = PANEL
+            obj._data_category = DataCate.PANEL
             symbol_index = SymbolIndex.init_from_dataset(symbol_dset)
             value = data_dset[:, :symbol_index.length]
             obj._data = pd.DataFrame(value, index=date_index.data, columns=symbol_index.data)
         else:
-            obj._data_category = TIME_SERIES
+            obj._data_category = DataCate.TIME_SERIES
             value = data_dset[:]
             obj._data = pd.Series(value, index=date_index)
         return obj
 
+    @debug_wrapper(logger)
     def decompose2dataset(self):
         '''
         将内部pd.DataFrame(或者pd.Series)格式的数据分解为数据、时间轴数据和代码轴数据(如果是面板数据)
@@ -343,12 +358,13 @@ class Data(object):
         '''
         data = self._data.values
         date_index = TimeIndex.init_from_index(self._data.index)
-        if self._data_category == PANEL:
+        if self._data_category == DataCate.PANEL:
             symbol_index = SymbolIndex.init_from_index(self._data.columns)
         else:
             symbol_index = None
         return data, date_index, symbol_index
 
+    @debug_wrapper(logger)
     def rearrange_symbol(self, symbol_order):
         '''
         将数据按照给定的代码顺序对数据列重新排列(仅面板数据有该方法)，排列机制如下：
@@ -362,13 +378,14 @@ class Data(object):
         symbol_order: iterable
             给定的代码排列顺序
         '''
-        if self._data_category == TIME_SERIES:
+        if self._data_category == DataCate.TIME_SERIES:
             raise NotImplementedError
 
         diff = sorted(self._data.columns.difference(symbol_order))
         new_order = list(symbol_order) + diff
         self._data = self._data.reindex(columns=new_order)
 
+    @debug_wrapper(logger)
     def drop_before_date(self, date):
         '''
         将数据中在给定日期前(包括该日期)的数据都剔除
@@ -380,6 +397,7 @@ class Data(object):
         data = self._data
         self._data = data.loc[data.index > date]
 
+    @debug_wrapper(logger)
     def update(self, other):
         '''
         将数据与其他数据在时间轴上融合，重叠的数据均以参数为准(时间轴和代码轴)，具体融合的规则如下:
@@ -402,13 +420,14 @@ class Data(object):
             warnings.warn('Improper time order', RuntimeWarning)
             return
         self.drop_before_date(other.end_time)
-        if self.data_category == PANEL:
+        if self.data_category == DataCate.PANEL:
             self.rearrange_symbol(other.symbol_index)
         data = pd.concat([other.data, self._data], axis=0)
         if data.index.has_duplicates:
             raise ValueError('Duplicated time index')
         self._data = data
 
+    @debug_wrapper(logger)
     def sort_index(self, ascending=True):
         '''
         对时间轴进行排序
@@ -419,6 +438,18 @@ class Data(object):
             是否升序排列，默认为True
         '''
         self._data = self._data.sort_index(ascending=ascending)
+
+    @debug_wrapper(logger)
+    def as_type(self, dtype):
+        '''
+        将数据类型转换为给定的类型
+
+        Parameter
+        ---------
+        dtype: np.dtype like
+            数据类型标识
+        '''
+        self._data = self._data.astype(dtype)
 
     @property
     def data_category(self):
@@ -443,7 +474,7 @@ class Data(object):
 
     @property
     def symbol_index(self):
-        if self.data_category == PANEL:
+        if self.data_category == DataCate.PANEL:
             return self._data.columns
         else:
             return None
@@ -459,30 +490,244 @@ class Data(object):
         return len(self._data)
 
 
-if __name__ == '__main__':
-    import string
-    np.random.seed(1)
-    sample_data = np.random.rand(100, 10)
-    symbols = np.random.choice(list(string.ascii_lowercase), (10, 6))
-    symbols = [''.join(s) for s in symbols]
-    dates = pd.date_range('2010-01-01', periods=100, freq='B')
-    df = pd.DataFrame(sample_data, index=dates, columns=symbols)
-    db_data = Data.init_from_pd(df)
-    xdata, xdate, xsymbol = db_data.decompose2dataset()
-    p = r'C:\Users\howar\Desktop\test\db_test.h5'
-    # with h5py.File(p, 'w') as store:
-    #     store.create_dataset('test_data', shape=(100, 10), dtype=np.float64)
-    #     store['test_data'][...] = xdata
-    #     str_dtype = 'S20'
-    #     store.create_dataset('test_date', shape=(100, ), dtype=str_dtype)
-    #     store['test_date'][...] = xdate.to_bytes(str_dtype, '%Y-%m-%d')
-    #     store['test_date'].attrs['length'] = 100
-    #     store['test_date'].attrs['latest_data_time'] = xdate.end_time.strftime('%Y-%m-%d')
-    #     store['test_date'].attrs['start_time'] = xdate.start_time.strftime('%Y-%m-%d')
+class DBConnector(object):
+    '''
+    数据库文件管理类
 
-    #     store.create_dataset('test_symbol', shape=(10, ), dtype=str_dtype)
-    #     store['test_symbol'][...] = xsymbol.to_bytes(str_dtype)
-    #     store['test_symbol'].attrs['length'] = 10
-    with h5py.File(p, 'r') as store:
-        db_data_read = Data.init_from_datasets(
-            store['test_data'], store['test_date'], store['test_symbol'])
+    Parameter
+    ---------
+    path: string
+        数据文件的存储路径
+
+    Notes
+    -----
+    模块说明：
+    主要提供数据文件初始化功能、文件自动扩容功能、查询和插入数据功能，具体功能如下：
+        create_datafile: 如果数据文件不存在，则根据提供的参数和配置，创建一个新文件
+    '''
+
+    def __init__(self, path):
+        self._path = path
+        self._data_category = None
+        self._dtype = None
+
+    @classmethod
+    @debug_wrapper(logger)
+    def create_datafile(cls, path, data_category, dtype=DB_CONFIG['default_data_type'],
+                        init_col_size=DB_CONFIG['initial_col_size']):
+        '''
+        创建数据文件，并对数据文件进行初始化，返回对应的数据文件对象
+
+        Parameter
+        ---------
+        path: string
+            文件的路径
+        data_category: DataCate
+            数据类别，目前支持[PANEL, TIME_SERIES]
+        dtype: np.dtype
+            数据类型
+        init_col_size: int or float
+            初始化时列的长度
+
+        Return
+        ------
+        obj: DBConnector
+            包含初始信息的数据库对象
+        '''
+        obj = cls(path)
+        valid_category = [DataCate.PANEL, DataCate.TIME_SERIES]
+        if data_category not in valid_category:
+            raise InvalidInputTypeError('Unsupport data category, expect {exp}, you provide {yp}'.
+                                        format(exp=valid_category, yp=data_category))
+        obj._data_category = data_category
+        dtype = np.dtype(dtype)
+        if str(dtype)[0].lower() not in DB_CONFIG['valid_type_header']:
+            raise InvalidInputTypeError('Unsupported data type')
+        obj._dtype = dtype
+
+        # 文件初始化
+        with h5py.File(obj._path, 'w-') as store:
+            # 时间数据初始化
+            store.create_dataset('time', shape=(1, ), maxshape=(None, ),
+                                 dtype=DB_CONFIG['date_dtype'])
+            store['time'].attrs['length'] = 0
+            store['time'].attrs['latest_data_time'] = NaS
+            store['time'].attrs['start_time'] = NaS
+            # 属性初始化
+            store.attrs['filled status'] = FilledStatus.EMPTY.name
+            store.attrs['data category'] = obj._data_category.name
+            if obj._data_category == DataCate.PANEL:   # 面板数据初始化
+                store.create_dataset('symbol', shape=(1, ), maxshape=(None, ),
+                                     dtype=DB_CONFIG['symbol_dtype'])
+                store.create_dataset('data', shape=(1, init_col_size),
+                                     maxshape=(None, init_col_size), chunks=(1, init_col_size),
+                                     dtype=obj._dtype)
+                store.attrs['column size'] = init_col_size
+                store['symbol'].attrs['length'] = 0
+                store['data'].attrs['dtype'] = str(obj._dtype)
+            else:
+                store.create_dataset('data', shape=(1, ), maxshape=(None, ),
+                                     dtype=obj._dtype)
+                store.attrs['column size'] = 1
+                store['data'].attrs['dtype'] = str(obj._dtype)
+        return obj
+
+    @classmethod
+    @debug_wrapper(logger)
+    def init_from_file(cls, path):
+        '''
+        从数据文件对数据库对象进行初始化，如果无法找到文件则会触发FileNotFoundError
+
+        Parameter
+        ---------
+        path: string
+            文件所在的路径
+
+        Return
+        ------
+        obj: DBConnector
+            经过数据文件初始化后的数据库对象
+        '''
+        obj = cls(path)
+        try:
+            store = h5py.File(path, 'r')
+            obj._data_category = DataCate[store.attrs['data category']]
+            obj._dtype = store['data'].attrs['dtype']
+        except OSError:
+            raise FileNotFoundError
+
+    @debug_wrapper(logger)
+    def query_all(self):
+        '''
+        返回当前数据集中的所有数据，并根据数据的分类返回恰当的格式，PANEL->pd.DataFrame，
+        TS->pd.Series
+
+        Return
+        ------
+        out: pd.DataFrame or pd.Series
+            数据文件中存储的所有数据
+        '''
+        try:
+            store = h5py.File(self._path, 'r')
+            # 加载日期数据
+            date_dset = store['date']
+            dates = pd.to_datetime([s.decode('utf-8') for s in date_dset[...]])
+            if self._data_category == DataCate.PANEL:
+                symbol_dset = store['symbol']
+                symbol_length = symbol_dset.attrs['length']
+                symbols = [s.decode('utf-8') for s in symbol_dset[...]]
+                data_dset = store['data']
+                datas = data_dset[:, :symbol_length]
+                out = pd.DataFrame(datas, index=dates, columns=symbols)
+            elif self._data_category == DataCate.TIME_SERIES:
+                data_dset = store['data']
+                datas = data_dset[...]
+                out = pd.Series(datas, index=dates)
+            else:
+                raise NotImplementedError
+        finally:
+            store.close()
+        return out
+
+    @debug_wrapper(logger)
+    def _query_panel(self, start_time, end_time):
+        '''
+        请求时间序列的数据(包含首尾)
+
+        Parameter
+        ---------
+        start_time: datetime like
+            开始时间
+        end_time: datetime like
+            结束时间
+
+        Return
+        ------
+        out: pd.DataFrame or pd.Series
+            若数据分类为PANEL，则返回pd.DataFrame，反之如果为TIME_SERIES则返回pd.Series，若没有符合
+            要求的数据，返回None
+        '''
+        start_time = pd.to_datetime(start_time)
+        end_time = pd.to_datetime(end_time)
+        all_data = self.query_all()
+        mask = (all_data.index <= end_time) & (all_data.index >= start_time)
+        out = all_data.loc[mask]
+        if len(out) <= 0:
+            return None
+        return out
+
+    @debug_wrapper(logger)
+    def _query_cs(self, ptime):
+        '''
+        请求横截面数据，仅支持PANEL类型的数据
+
+        ptime: datetime like
+            横截面数据时间点
+
+        Return
+        ------
+        out: pd.Series
+            横截面数据，若没有则返回None
+        '''
+        if self._data_category == DataCate.TIME_SERIES:
+            raise NotImplementedError
+        all_data = self.query_all()
+        try:
+            out = all_data.loc[ptime]
+        except KeyError:
+            out = None
+        return out
+
+    @debug_wrapper(logger)
+    def query(self, start_time, end_time=None):
+        '''
+        统一数据查询接口
+
+        Parameter
+        ---------
+        start_time: datetime like
+            开始时间
+        end_time: datetime like, default None
+            结束时间，若该参数为None，表示要获取横截面数据
+
+        Return
+        ------
+        out: pd.Series or pd.DataFrame
+            返回数据的类型根据查询结果而定
+        '''
+        if end_time is None:
+            out = self._query_cs(start_time)
+        else:
+            out = self._query_panel(start_time, end_time)
+        return out
+
+
+if __name__ == '__main__':
+    # import string
+    # np.random.seed(1)
+    # sample_data = np.random.rand(100, 10)
+    # symbols = np.random.choice(list(string.ascii_lowercase), (10, 6))
+    # symbols = [''.join(s) for s in symbols]
+    # dates = pd.date_range('2010-01-01', periods=100, freq='B')
+    # df = pd.DataFrame(sample_data, index=dates, columns=symbols)
+    # db_data = Data.init_from_pd(df)
+    # xdata, xdate, xsymbol = db_data.decompose2dataset()
+    # p = r'C:\Users\howar\Desktop\test\db_test.h5'
+    # # with h5py.File(p, 'w') as store:
+    # #     store.create_dataset('test_data', shape=(100, 10), dtype=np.float64)
+    # #     store['test_data'][...] = xdata
+    # #     str_dtype = 'S20'
+    # #     store.create_dataset('test_date', shape=(100, ), dtype=str_dtype)
+    # #     store['test_date'][...] = xdate.to_bytes(str_dtype, '%Y-%m-%d')
+    # #     store['test_date'].attrs['length'] = 100
+    # #     store['test_date'].attrs['latest_data_time'] = xdate.end_time.strftime('%Y-%m-%d')
+    # #     store['test_date'].attrs['start_time'] = xdate.start_time.strftime('%Y-%m-%d')
+
+    # #     store.create_dataset('test_symbol', shape=(10, ), dtype=str_dtype)
+    # #     store['test_symbol'][...] = xsymbol.to_bytes(str_dtype)
+    # #     store['test_symbol'].attrs['length'] = 10
+    # with h5py.File(p, 'r') as store:
+    #     db_data_read = Data.init_from_datasets(
+    #         store['test_data'], store['test_date'], store['test_symbol'])
+    connector = DBConnector.create_datafile('C:\\Users\\c\\Desktop\\test.h5',
+                                            DataCate.TIME_SERIES)
