@@ -12,6 +12,7 @@ from os import sep
 from copy import deepcopy
 import re
 import pdb
+from functools import wraps
 
 from qrtconst import REL_PATH_HEADER_LEN
 
@@ -115,6 +116,7 @@ def debug_wrapper(logger):
         装饰后的函数
     '''
     def wrapper(func):
+        @wraps(func)
         def inner(*args, **kwargs):
             logger.debug('call ' + func.__name__ + ' with args = ' +
                          repr(args) + ', kwargs = ' + repr(kwargs))
