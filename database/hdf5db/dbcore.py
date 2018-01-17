@@ -263,6 +263,12 @@ class SymbolIndex(DataIndex):
     def data(self):
         return self._data
 
+    def copy(self):
+        obj = SymbolIndex()
+        obj._data = self._data.copy()
+        obj._length = self._length
+        return obj
+
 
 class Data(object):
     '''
@@ -504,7 +510,19 @@ class DBConnector(object):
     -----
     模块说明：
     主要提供数据文件初始化功能、文件自动扩容功能、查询和插入数据功能，具体功能如下：
-        create_datafile: 如果数据文件不存在，则根据提供的参数和配置，创建一个新文件
+        create_datafile: 类方法，如果数据文件不存在，则根据提供的参数和配置，创建一个新文件
+        init_from_file: 类方法，使用文件对数据库对象进行初始化
+        query_all: 返回数据库中的所有数据
+        query: 返回特定时间的数据
+        insert: 将给定的数据插入到数据库中
+        reshape_colsize: 重置数据库文件中列的大小
+    使用方法：
+        第一次初始化可以使用create_datafile方法，该函数将创建一个数据文件，并进行相关初始化属性的设置，
+        以后可以直接通过init_from_file方法对数据库进行初始化，如果没有找到对应的文件，将引发FileNotFoundError，
+        通常可以先尝试从文件中初始化，然后捕捉对应的异常，在异常中创建文件
+    注意:
+        正常的数据插入将会对应更新对象的相应属性，但是如果出现了reshape_colsize的情况，将会创建新的
+        数据文件，通过新的对象来对数据文件进行维护，因此当前的对象已经不再适用
     '''
 
     def __init__(self, path):
@@ -513,6 +531,22 @@ class DBConnector(object):
         self._dtype = None
         self.property = None   # 字典，记录数据库文件的所有属性
         self.symbols = None     # 用于记录当前数据的股票代码，TIME_SERIES的该属性为None
+
+    def init_from_object(self, obj):
+        '''
+        从其他数据库对象进行初始化，主要用于解决重新创建文件后无法保持对文件的跟踪的问题
+
+        Parameter
+        ---------
+        obj: DBConnector
+        '''
+        from copy import deepcopy
+        self._path = obj._path
+        self._data_category = obj._data_category
+        self._dtype = obj._dtype
+        self.property = deepcopy(obj.property)
+        if obj.symbols is not None:
+            self.symbols = obj.symbols.copy()
 
     @classmethod
     @debug_wrapper(logger)
@@ -628,9 +662,11 @@ class DBConnector(object):
         Return
         ------
         out: pd.DataFrame or pd.Series
-            数据文件中存储的所有数据
+            数据文件中存储的所有数据，若没有填充任何数据，则返回None
         '''
         try:
+            if self.property['filled status'] == FilledStatus.EMPTY:
+                return None
             store = h5py.File(self._path, 'r')
             # 加载日期数据
             date_dset = store['date']
@@ -670,10 +706,13 @@ class DBConnector(object):
         start_time = pd.to_datetime(start_time)
         end_time = pd.to_datetime(end_time)
         all_data = self.query_all()
-        mask = (all_data.index <= end_time) & (all_data.index >= start_time)
-        out = all_data.loc[mask]
-        if len(out) <= 0:
-            return None
+        if all_data is not None:
+            mask = (all_data.index <= end_time) & (all_data.index >= start_time)
+            out = all_data.loc[mask]
+            if len(out) <= 0:
+                return None
+        else:
+            out = None
         return out
 
     @debug_wrapper(logger)
@@ -692,6 +731,8 @@ class DBConnector(object):
         if self._data_category == DataCate.TIME_SERIES:
             raise NotImplementedError
         all_data = self.query_all()
+        if all_data is None:
+            return None
         try:
             out = all_data.loc[ptime]
         except KeyError:
@@ -732,13 +773,20 @@ class DBConnector(object):
             数据要求为数值格式(dtype以f或者i开头)，其中index为时间，要求为datetime类型，columns为
             代码列表(如果数据为pd.DataFrame)
         '''
-        dtypes = data.dtypes.astype(str)
-        if not any([np.all(dtypes.str.startswith(s)) for s in DB_CONFIG['valid_type_header']]):
+        dtypes = data.dtypes
+        if hasattr(dtypes, '__iter__'):  # pd.DataFrame
+            dtypes = dtypes.astype(str)
+            is_valid_type = any([np.all(dtypes.str.startswith(s))
+                                 for s in DB_CONFIG['valid_type_header']])
+        else:   # pd.Series
+            is_valid_type = any([str(dtypes).startswith(s)
+                                 for s in DB_CONFIG['valid_type_header']])
+        if not is_valid_type:
             raise UnsupportDataTypeError('Data type is not supported!')
         data = data.astype(self._dtype)
-        if isinstance(pd.DataFrame):
+        if isinstance(data, pd.DataFrame):
             self._insert_df(data)
-        elif isinstance(pd.Series):
+        elif isinstance(data, pd.Series):
             self._insert_series(data)
         else:
             raise NotImplementedError
@@ -752,20 +800,19 @@ class DBConnector(object):
         ---------
         data: pd.DataFrame
         '''
-        if self._dtype != DataCate.PANEL:
-            raise InvalidInputTypeError('pd.DataFrame is expected, you provide {yp}'.
-                                        format(type(data)))
+        if self._data_category != DataCate.PANEL:
+            raise UnsupportDataTypeError('{dt} is not supported by {dc}'.
+                                         format(dt=type(data), dc=DataCate.PANEL.name))
         data = Data.init_from_pd(data)  # 获取数据
         obj_property = self.property
-        if len(data.columns) > obj_property['symbol']['length']:    # 数据列超过文件列容量
+        if len(data.symbol_index) > obj_property['column size']:    # 数据列超过文件列容量
             import warnings
             warnings.warn('Data column needs to be resized!', RuntimeWarning)
-            reshape_obj = self.reshape_colsize(data)
-            return reshape_obj
+            self.reshape_colsize(data)
         if obj_property['filled status'] == FilledStatus.FILLED:   # 非第一次更新
             data.rearrange_symbol(self.symbols.data.tolist())   # 对数据进行重新排列
-        # 对数据进行切割、分解
-        data.drop_before_date(obj_property['time']['latest_data_time'])
+            # 对数据进行切割
+            data.drop_before_date(obj_property['time']['latest_data_time'])
         data_arr, data_index, data_symbol = data.decompose2dataset()
 
         start_index = obj_property['time']['length']
@@ -775,30 +822,32 @@ class DBConnector(object):
             time_dset = store['time']
             symbol_dset = store['symbol']
             # 重新分配容量，填入数据
-            data_dset.resize((end_index, obj_property))
-            data_dset[start_index: end_index, :len(data.columns)] = data_arr
+            data_dset.resize((end_index, obj_property['column size']))
+            data_dset[start_index: end_index, :len(data.symbol_index)] = data_arr
 
             time_dset.resize((end_index, ))
             time_dset[start_index: end_index] = data_index.to_bytes(DB_CONFIG['date_dtype'],
                                                                     DB_CONFIG['db_time_format'])
-            symbol_dset[: len(data.columns)] = data_symbol.to_bytes(DB_CONFIG['symbol_dtype'])
+            symbol_dset.resize((len(data.symbol_index), ))
+            symbol_dset[...] = data_symbol.to_bytes(DB_CONFIG['symbol_dtype'])
             # 更新相应的属性数据
             if obj_property['filled status'] == FilledStatus.EMPTY:
                 store.attrs['filled status'] = FilledStatus.FILLED.name
                 time_dset.attrs['start_time'] = data_index.start_time\
-                    .format(DB_CONFIG['db_time_format'])
+                    .strftime(DB_CONFIG['db_time_format'])
                 # 更新property
                 obj_property['filled status'] = FilledStatus.FILLED
                 obj_property['time']['start_time'] = data_index.start_time
 
             time_dset.attrs['latest_data_time'] = data_index.end_time\
-                .format(DB_CONFIG['db_time_format'])
+                .strftime(DB_CONFIG['db_time_format'])
             time_dset.attrs['length'] = end_index
-            symbol_dset.attrs['length'] = len(data.columns)
+            symbol_dset.attrs['length'] = len(data.symbol_index)
 
             obj_property['time']['latest_data_time'] = data_index.end_time
             obj_property['time']['length'] = end_index
-            obj_property['symbol']['length'] = len(data.columns)
+            obj_property['symbol']['length'] = len(data.symbol_index)
+        self.symbols = SymbolIndex.init_from_index(data.symbol_index)
 
     @debug_wrapper(logger)
     def _insert_series(self, data):
@@ -814,7 +863,8 @@ class DBConnector(object):
                                         format(type(data)))
         obj_property = self.property
         data = Data.init_from_pd(data)
-        data.drop_before_date(obj_property['time']['latest_data_time'])
+        if obj_property['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据
+            data.drop_before_date(obj_property['time']['latest_data_time'])
         data_arr, data_index, _ = data.decompose2dataset()
         start_index = obj_property['time']['length']
         end_index = start_index + len(data)
@@ -825,18 +875,19 @@ class DBConnector(object):
             data_dset[start_index: end_index] = data_arr
 
             time_dset.resize((end_index, ))
-            time_dset[start_index: end_index] = data_index
+            time_dset[start_index: end_index] = data_index.to_bytes(DB_CONFIG['date_dtype'],
+                                                                    DB_CONFIG['db_time_format'])
             # 更新属性数据
             if obj_property['filled status'] == FilledStatus.EMPTY:
                 store.attrs['filled status'] = FilledStatus.FILLED.name
                 time_dset.attrs['start_time'] = data_index.start_time\
-                    .format(DB_CONFIG['db_time_format'])
+                    .strftime(DB_CONFIG['db_time_format'])
                 # 更新property
                 obj_property['filled status'] = FilledStatus.FILLED
                 obj_property['time']['start_time'] = data_index.start_time
 
             time_dset.attrs['latest_data_time'] = data_index.end_time\
-                .format(DB_CONFIG['db_time_format'])
+                .strftime(DB_CONFIG['db_time_format'])
             time_dset.attrs['length'] = end_index
 
             obj_property['time']['latest_data_time'] = data_index.end_time
@@ -855,13 +906,15 @@ class DBConnector(object):
         if self._data_category == DataCate.TIME_SERIES:
             raise NotImplementedError
         if self.property['filled status'] == FilledStatus.EMPTY:    # 第一次插入数据是出现容量不足
-            db_data = Data.init_from_pd(self.query_all())
-            data.update(db_data)
+            db_data = self.query_all()
+            if db_data is not None:
+                db_data = Data.init_from_pd(db_data)
+                data.update(db_data)
         remove(self._path)
         new_size = self.property['column size'] + DB_CONFIG['col_size_increase_step']
         obj = DBConnector.create_datafile(self._path, self._data_category, self._dtype, new_size)
-        obj.insert(data.data)
-        return obj
+        self.init_from_object(obj)
+        self.insert(data)
 
 
 if __name__ == '__main__':

@@ -7,12 +7,15 @@ Created on Thu Jan 11 15:45:24 2018
 辅助工具模块
 """
 import json
-from os.path import join
+from os.path import join, basename
 from os import sep
 from copy import deepcopy
 import re
 import pdb
 from functools import wraps
+import sys
+
+import pandas as pd
 
 from qrtconst import REL_PATH_HEADER_LEN
 
@@ -118,8 +121,17 @@ def debug_wrapper(logger):
     def wrapper(func):
         @wraps(func)
         def inner(*args, **kwargs):
-            logger.debug('call ' + func.__name__ + ' with args = ' +
-                         repr(args) + ', kwargs = ' + repr(kwargs))
+            ignores = (pd.DataFrame, pd.Series, pd.Index)
+            file = basename(sys._getframe().f_code.co_filename)
+            line = sys._getframe().f_lineno
+            pargs = [type(s) if isinstance(s, ignores) else s
+                     for s in args]
+            pkwargs = {k: type(v) if isinstance(v, ignores) else v
+                       for k, v in kwargs.items()}
+            msg = 'file: {file}, line: {line}, call {func} with args = {args}, kwargs = {kwargs}'\
+                .format(file=file, line=line, func=func.__name__, args=repr(pargs),
+                        kwargs=repr(pkwargs))
+            logger.debug(msg)
             return func(*args, **kwargs)
         return inner
     return wrapper
