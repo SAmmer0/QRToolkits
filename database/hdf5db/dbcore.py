@@ -10,6 +10,7 @@ Created on Thu Jan 11 14:53:33 2018
 import abc
 import logging
 from os import remove
+import pdb
 
 import pandas as pd
 import h5py
@@ -346,7 +347,7 @@ class Data(object):
         else:
             obj._data_category = DataCate.TIME_SERIES
             value = data_dset[:]
-            obj._data = pd.Series(value, index=date_index)
+            obj._data = pd.Series(value, index=date_index.data)
         return obj
 
     @debug_wrapper(logger)
@@ -429,6 +430,7 @@ class Data(object):
         self.drop_before_date(other.end_time)
         if self.data_category == DataCate.PANEL:
             self.rearrange_symbol(other.symbol_index)
+            other.rearrange_symbol(self.symbol_index)   # 保证合并后的顺序一致
         data = pd.concat([other.data, self._data], axis=0)
         if data.index.has_duplicates:
             raise ValueError('Duplicated time index')
@@ -652,6 +654,7 @@ class DBConnector(object):
                 obj.symbols = SymbolIndex.init_from_dataset(store['symbol'])
         except OSError:
             raise FileNotFoundError
+        return obj
 
     @debug_wrapper(logger)
     def query_all(self):
@@ -669,7 +672,7 @@ class DBConnector(object):
                 return None
             store = h5py.File(self._path, 'r')
             # 加载日期数据
-            date_dset = store['date']
+            date_dset = store['time']
             if self._data_category == DataCate.PANEL:
                 symbol_dset = store['symbol']
                 data_dset = store['data']
@@ -809,10 +812,13 @@ class DBConnector(object):
             import warnings
             warnings.warn('Data column needs to be resized!', RuntimeWarning)
             self.reshape_colsize(data)
+            return
         if obj_property['filled status'] == FilledStatus.FILLED:   # 非第一次更新
             data.rearrange_symbol(self.symbols.data.tolist())   # 对数据进行重新排列
             # 对数据进行切割
             data.drop_before_date(obj_property['time']['latest_data_time'])
+            if len(data) == 0:  # 没有数据需要插入
+                return
         data_arr, data_index, data_symbol = data.decompose2dataset()
 
         start_index = obj_property['time']['length']
@@ -823,6 +829,7 @@ class DBConnector(object):
             symbol_dset = store['symbol']
             # 重新分配容量，填入数据
             data_dset.resize((end_index, obj_property['column size']))
+            data_dset[start_index: end_index, :] = np.nan
             data_dset[start_index: end_index, :len(data.symbol_index)] = data_arr
 
             time_dset.resize((end_index, ))
@@ -865,6 +872,8 @@ class DBConnector(object):
         data = Data.init_from_pd(data)
         if obj_property['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据
             data.drop_before_date(obj_property['time']['latest_data_time'])
+            if len(data) == 0:
+                return
         data_arr, data_index, _ = data.decompose2dataset()
         start_index = obj_property['time']['length']
         end_index = start_index + len(data)
@@ -905,7 +914,7 @@ class DBConnector(object):
         '''
         if self._data_category == DataCate.TIME_SERIES:
             raise NotImplementedError
-        if self.property['filled status'] == FilledStatus.EMPTY:    # 第一次插入数据是出现容量不足
+        if self.property['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据是出现容量不足
             db_data = self.query_all()
             if db_data is not None:
                 db_data = Data.init_from_pd(db_data)
@@ -914,35 +923,4 @@ class DBConnector(object):
         new_size = self.property['column size'] + DB_CONFIG['col_size_increase_step']
         obj = DBConnector.create_datafile(self._path, self._data_category, self._dtype, new_size)
         self.init_from_object(obj)
-        self.insert(data)
-
-
-if __name__ == '__main__':
-    # import string
-    # np.random.seed(1)
-    # sample_data = np.random.rand(100, 10)
-    # symbols = np.random.choice(list(string.ascii_lowercase), (10, 6))
-    # symbols = [''.join(s) for s in symbols]
-    # dates = pd.date_range('2010-01-01', periods=100, freq='B')
-    # df = pd.DataFrame(sample_data, index=dates, columns=symbols)
-    # db_data = Data.init_from_pd(df)
-    # xdata, xdate, xsymbol = db_data.decompose2dataset()
-    # p = r'C:\Users\howar\Desktop\test\db_test.h5'
-    # # with h5py.File(p, 'w') as store:
-    # #     store.create_dataset('test_data', shape=(100, 10), dtype=np.float64)
-    # #     store['test_data'][...] = xdata
-    # #     str_dtype = 'S20'
-    # #     store.create_dataset('test_date', shape=(100, ), dtype=str_dtype)
-    # #     store['test_date'][...] = xdate.to_bytes(str_dtype, '%Y-%m-%d')
-    # #     store['test_date'].attrs['length'] = 100
-    # #     store['test_date'].attrs['latest_data_time'] = xdate.end_time.strftime('%Y-%m-%d')
-    # #     store['test_date'].attrs['start_time'] = xdate.start_time.strftime('%Y-%m-%d')
-
-    # #     store.create_dataset('test_symbol', shape=(10, ), dtype=str_dtype)
-    # #     store['test_symbol'][...] = xsymbol.to_bytes(str_dtype)
-    # #     store['test_symbol'].attrs['length'] = 10
-    # with h5py.File(p, 'r') as store:
-    #     db_data_read = Data.init_from_datasets(
-    #         store['test_data'], store['test_date'], store['test_symbol'])
-    connector = DBConnector.create_datafile('C:\\Users\\c\\Desktop\\test.h5',
-                                            DataCate.TIME_SERIES)
+        self.insert(data.data)

@@ -7,13 +7,12 @@ Created on Thu Jan 11 15:45:24 2018
 辅助工具模块
 """
 import json
-from os.path import join, basename
+from os.path import join
 from os import sep
 from copy import deepcopy
 import re
 import pdb
 from functools import wraps
-import sys
 
 import pandas as pd
 
@@ -122,14 +121,12 @@ def debug_wrapper(logger):
         @wraps(func)
         def inner(*args, **kwargs):
             ignores = (pd.DataFrame, pd.Series, pd.Index)
-            file = basename(sys._getframe().f_code.co_filename)
-            line = sys._getframe().f_lineno
             pargs = [type(s) if isinstance(s, ignores) else s
                      for s in args]
             pkwargs = {k: type(v) if isinstance(v, ignores) else v
                        for k, v in kwargs.items()}
-            msg = 'file: {file}, line: {line}, call {func} with args = {args}, kwargs = {kwargs}'\
-                .format(file=file, line=line, func=func.__name__, args=repr(pargs),
+            msg = 'call {func} with args = {args}, kwargs = {kwargs}'\
+                .format(func=func.__name__, args=repr(pargs),
                         kwargs=repr(pkwargs))
             logger.debug(msg)
             return func(*args, **kwargs)
