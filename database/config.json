@@ -1,6 +1,6 @@
 {
 // database configuration
-    "HDF5": {
+    "hdf5db": {
         // Warning: HDF5 database is designed to store numerical data, any setting related
         // to string like data may lead to unpredictable outcome.
         // supported data type, "i" for int and "f" for float
@@ -25,7 +25,7 @@
             // log level
             "log_level": "DEBUG",
             // log format
-            "format": "%(asctime)s: %(module)s.%(funcName)s %(lineno)s %(message)s",
+            "format": "%(asctime)s %(levelname)s %(filename)s-%(lineno)s: %(message)s",
             // date format
             "date_format": "%Y-%m-%d %H:%M:%S"
         },

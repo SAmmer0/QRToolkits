@@ -103,36 +103,5 @@ def relpath2abs(parent_folder, rel_path):
     return join(parent_folder, rel_path[REL_PATH_HEADER_LEN:])
 
 
-def debug_wrapper(logger):
-    '''
-    装饰器，用于向给定日志中打印相关调用和参数信息
-
-    Parameter
-    ---------
-    logger: logging.Logger
-        日志句柄
-
-    Return
-    ------
-    wrapper: function
-        装饰后的函数
-    '''
-    def wrapper(func):
-        @wraps(func)
-        def inner(*args, **kwargs):
-            ignores = (pd.DataFrame, pd.Series, pd.Index)
-            pargs = [type(s) if isinstance(s, ignores) else s
-                     for s in args]
-            pkwargs = {k: type(v) if isinstance(v, ignores) else v
-                       for k, v in kwargs.items()}
-            msg = 'call {func} with args = {args}, kwargs = {kwargs}'\
-                .format(func=func.__name__, args=repr(pargs),
-                        kwargs=repr(pkwargs))
-            logger.debug(msg)
-            return func(*args, **kwargs)
-        return inner
-    return wrapper
-
-
 if __name__ == '__main__':
     config = parse_config(r'E:\QRToolkits\database\config.json')

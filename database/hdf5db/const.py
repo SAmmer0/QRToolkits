@@ -12,7 +12,7 @@ import enum
 from database.utils import submodule_initialization, set_logger
 from database.const import DataCate, NaS
 
-SUBMODULE_NAME = 'HDF5'
+SUBMODULE_NAME = 'hdf5db'
 # 设置日志选项
 DB_CONFIG = submodule_initialization(SUBMODULE_NAME, dirname(__file__))
 

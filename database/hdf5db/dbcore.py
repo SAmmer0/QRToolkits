@@ -17,7 +17,6 @@ import h5py
 import numpy as np
 
 from database.hdf5db.const import LOGGER_NAME, DB_CONFIG, DataCate, FilledStatus, NaS
-from qrtutils import debug_wrapper
 from database.hdf5db.exceptions import InvalidInputTypeError, UnsupportDataTypeError
 
 # 获取当前日志句柄
@@ -100,7 +99,6 @@ class TimeIndex(DataIndex):
         self._data = None
 
     @classmethod
-    @debug_wrapper(logger)
     def init_from_dataset(cls, date_dset):
         '''
         使用数据集对象对TimeIndex进行初始化
@@ -115,6 +113,7 @@ class TimeIndex(DataIndex):
         obj: TimeIndex
             经过数据集数据初始化后的TimeIndex对象
         '''
+        logger.debug("TimeIndex.init_from_dataset")
         obj = cls()
         dates = date_dset[...]
         obj._data = pd.Index(pd.to_datetime([s.decode('utf-8') for s in dates]))
@@ -124,7 +123,6 @@ class TimeIndex(DataIndex):
         return obj
 
     @classmethod
-    @debug_wrapper(logger)
     def init_from_index(cls, pd_index):
         '''
         使用索引对象对TimeIndex进行初始化
@@ -139,6 +137,7 @@ class TimeIndex(DataIndex):
         obj: TimeIndex
             经过pd.Index对象初始化后的TimeIndex对象
         '''
+        logger.debug("TimeIndex.init_from_index")
         obj = cls()
         obj._data = pd_index
         obj._length = len(pd_index)
@@ -146,7 +145,6 @@ class TimeIndex(DataIndex):
         obj._end_time = pd_index[-1]
         return obj
 
-    @debug_wrapper(logger)
     def to_bytes(self, dtype, date_fmt):
         '''
         将索引数据对象转化为二进制字符串序列
@@ -162,6 +160,7 @@ class TimeIndex(DataIndex):
         ------
         dates: np.array
         '''
+        logger.debug("TimeIndex.to_bytes")
         if not dtype.lower().startswith('s'):
             raise InvalidInputTypeError("Wrong dtype for date string, given {}".format(dtype))
         out = self._data.strftime(date_fmt).astype(dtype)
@@ -197,7 +196,6 @@ class SymbolIndex(DataIndex):
         self._length = None
 
     @classmethod
-    @debug_wrapper(logger)
     def init_from_dataset(cls, symbol_dset):
         '''
         使用数据集对象对SymbolIndex进行初始化
@@ -211,6 +209,7 @@ class SymbolIndex(DataIndex):
         ------
         obj: SymbolIndex
         '''
+        logger.debug("SymbolIndex.init_from_dataset")
         obj = cls()
         data = symbol_dset[...]
         obj._data = pd.Index([s.decode('utf-8') for s in data])
@@ -218,7 +217,6 @@ class SymbolIndex(DataIndex):
         return obj
 
     @classmethod
-    @debug_wrapper(logger)
     def init_from_index(cls, pd_index):
         '''
         使用索引对象对SymbolIndex进行初始化
@@ -232,12 +230,12 @@ class SymbolIndex(DataIndex):
         ------
         obj: SymbolIndex
         '''
+        logger.debug("SymbolIndex.init_from_index")
         obj = cls()
         obj._data = pd_index
         obj._length = len(pd_index)
         return obj
 
-    @debug_wrapper(logger)
     def to_bytes(self, dtype):
         '''
         将索引数据对象转化为二进制字符串序列
@@ -251,6 +249,7 @@ class SymbolIndex(DataIndex):
         ------
         dates: np.array
         '''
+        logger.debug("SymbolIndex.to_bytes")
         if not dtype.lower().startswith('s'):
             raise InvalidInputTypeError("Wrong dtype for date string, given {}".format(dtype))
         out = np.array(self._data, dtype=dtype)
@@ -290,7 +289,6 @@ class Data(object):
         self._data = None
 
     @classmethod
-    @debug_wrapper(logger)
     def init_from_pd(cls, pd_data):
         '''
         使用(排序后的)pd.DataFrame(或者pd.Series)对数据进行初始化
@@ -306,6 +304,7 @@ class Data(object):
         obj: Data
             通过pd.DataFrame初始化后的对象
         '''
+        logger.debug("Data.init_from_pd")
         obj = cls()
         if isinstance(pd_data, pd.DataFrame):
             obj._data_category = DataCate.PANEL
@@ -318,7 +317,6 @@ class Data(object):
         return obj
 
     @classmethod
-    @debug_wrapper(logger)
     def init_from_datasets(cls, data_dset, date_dset, symbol_dset=None):
         '''
         使用数据集数据对对象进行初始化
@@ -337,20 +335,21 @@ class Data(object):
         obj: Data
             通过数据集数据初始化后的对象
         '''
+        logger.debug("Data.init_from_datasets")
         obj = cls()
         date_index = TimeIndex.init_from_dataset(date_dset)
         if symbol_dset is not None:
             obj._data_category = DataCate.PANEL
             symbol_index = SymbolIndex.init_from_dataset(symbol_dset)
             value = data_dset[:, :symbol_index.length]
-            obj._data = pd.DataFrame(value, index=date_index.data, columns=symbol_index.data)
+            data = pd.DataFrame(value, index=date_index.data, columns=symbol_index.data)
         else:
             obj._data_category = DataCate.TIME_SERIES
             value = data_dset[:]
-            obj._data = pd.Series(value, index=date_index.data)
+            data = pd.Series(value, index=date_index.data)
+        obj._data = data.sort_index()
         return obj
 
-    @debug_wrapper(logger)
     def decompose2dataset(self):
         '''
         将内部pd.DataFrame(或者pd.Series)格式的数据分解为数据、时间轴数据和代码轴数据(如果是面板数据)
@@ -364,6 +363,7 @@ class Data(object):
         symbol_index: SymbolIndex
             代码数据，如果原始数据为时间序列数据则该返回值为None
         '''
+        logger.debug("Data.decompose2dataset")
         data = self._data.values
         date_index = TimeIndex.init_from_index(self._data.index)
         if self._data_category == DataCate.PANEL:
@@ -372,7 +372,6 @@ class Data(object):
             symbol_index = None
         return data, date_index, symbol_index
 
-    @debug_wrapper(logger)
     def rearrange_symbol(self, symbol_order):
         '''
         将数据按照给定的代码顺序对数据列重新排列(仅面板数据有该方法)，排列机制如下：
@@ -386,6 +385,7 @@ class Data(object):
         symbol_order: iterable
             给定的代码排列顺序
         '''
+        logger.debug("Data.rearrange_symbol")
         if self._data_category == DataCate.TIME_SERIES:
             raise NotImplementedError
 
@@ -393,7 +393,6 @@ class Data(object):
         new_order = list(symbol_order) + diff
         self._data = self._data.reindex(columns=new_order)
 
-    @debug_wrapper(logger)
     def drop_before_date(self, date):
         '''
         将数据中在给定日期前(包括该日期)的数据都剔除
@@ -401,11 +400,11 @@ class Data(object):
         date: datetime like
             日期剔除的阈值
         '''
+        logger.debug("Data.drop_before_date")
         date = pd.to_datetime(date)
         data = self._data
         self._data = data.loc[data.index > date]
 
-    @debug_wrapper(logger)
     def update(self, other):
         '''
         将数据与其他数据在时间轴上融合，重叠的数据均以参数为准(时间轴和代码轴)，具体融合的规则如下:
@@ -420,6 +419,7 @@ class Data(object):
         other: Data
             更新数据的来源，要求提供的参数与当前对象的数据分类相同
         '''
+        logger.debug("Data.update")
         if self.data_category != other.data_category:
             raise ValueError('Incompatible data category, {dc} required, but {pdc} is provided'.
                              format(dc=self.data_category, pdc=other.data_category))
@@ -436,7 +436,6 @@ class Data(object):
             raise ValueError('Duplicated time index')
         self._data = data
 
-    @debug_wrapper(logger)
     def sort_index(self, ascending=True):
         '''
         对时间轴进行排序
@@ -446,9 +445,9 @@ class Data(object):
         ascending: boolean, default True
             是否升序排列，默认为True
         '''
+        logger.debug("Data.sort_index")
         self._data = self._data.sort_index(ascending=ascending)
 
-    @debug_wrapper(logger)
     def as_type(self, dtype):
         '''
         将数据类型转换为给定的类型
@@ -458,6 +457,7 @@ class Data(object):
         dtype: np.dtype like
             数据类型标识
         '''
+        logger.debug("Data.as_type")
         self._data = self._data.astype(dtype)
 
     @property
@@ -522,6 +522,7 @@ class DBConnector(object):
         第一次初始化可以使用create_datafile方法，该函数将创建一个数据文件，并进行相关初始化属性的设置，
         以后可以直接通过init_from_file方法对数据库进行初始化，如果没有找到对应的文件，将引发FileNotFoundError，
         通常可以先尝试从文件中初始化，然后捕捉对应的异常，在异常中创建文件
+        如果需要插入数据直接调用insert即可，若需要查询数据，使用query即可
     注意:
         正常的数据插入将会对应更新对象的相应属性，但是如果出现了reshape_colsize的情况，将会创建新的
         数据文件，通过新的对象来对数据文件进行维护，因此当前的对象已经不再适用
@@ -542,6 +543,7 @@ class DBConnector(object):
         ---------
         obj: DBConnector
         '''
+        logger.debug("DBConnector.init_from_object")
         from copy import deepcopy
         self._path = obj._path
         self._data_category = obj._data_category
@@ -551,7 +553,6 @@ class DBConnector(object):
             self.symbols = obj.symbols.copy()
 
     @classmethod
-    @debug_wrapper(logger)
     def create_datafile(cls, path, data_category, dtype=DB_CONFIG['default_data_type'],
                         init_col_size=DB_CONFIG['initial_col_size']):
         '''
@@ -573,6 +574,7 @@ class DBConnector(object):
         obj: DBConnector
             包含初始信息的数据库对象
         '''
+        logger.debug("DBConnector.create_datafile")
         obj = cls(path)
         valid_category = [DataCate.PANEL, DataCate.TIME_SERIES]
         if data_category not in valid_category:
@@ -621,7 +623,6 @@ class DBConnector(object):
         return obj
 
     @classmethod
-    @debug_wrapper(logger)
     def init_from_file(cls, path):
         '''
         从数据文件对数据库对象进行初始化，如果无法找到文件则会触发FileNotFoundError
@@ -636,6 +637,7 @@ class DBConnector(object):
         obj: DBConnector
             经过数据文件初始化后的数据库对象
         '''
+        logger.debug("DBConnector.init_from_file")
         obj = cls(path)
         try:
             store = h5py.File(path, 'r')
@@ -656,7 +658,6 @@ class DBConnector(object):
             raise FileNotFoundError
         return obj
 
-    @debug_wrapper(logger)
     def query_all(self):
         '''
         返回当前数据集中的所有数据，并根据数据的分类返回恰当的格式，PANEL->pd.DataFrame，
@@ -667,6 +668,7 @@ class DBConnector(object):
         out: pd.DataFrame or pd.Series
             数据文件中存储的所有数据，若没有填充任何数据，则返回None
         '''
+        logger.debug("DBConnector.query_all")
         try:
             if self.property['filled status'] == FilledStatus.EMPTY:
                 return None
@@ -688,7 +690,6 @@ class DBConnector(object):
             store.close()
         return out
 
-    @debug_wrapper(logger)
     def _query_panel(self, start_time, end_time):
         '''
         请求时间序列的数据(包含首尾)
@@ -706,6 +707,7 @@ class DBConnector(object):
             若数据分类为PANEL，则返回pd.DataFrame，反之如果为TIME_SERIES则返回pd.Series，若没有符合
             要求的数据，返回None
         '''
+        logger.debug("DBConnector._query_panel")
         start_time = pd.to_datetime(start_time)
         end_time = pd.to_datetime(end_time)
         all_data = self.query_all()
@@ -718,7 +720,6 @@ class DBConnector(object):
             out = None
         return out
 
-    @debug_wrapper(logger)
     def _query_cs(self, ptime):
         '''
         请求横截面数据，仅支持PANEL类型的数据
@@ -731,6 +732,7 @@ class DBConnector(object):
         out: pd.Series
             横截面数据，若没有则返回None
         '''
+        logger.debug("DBConnector._query_cs")
         if self._data_category == DataCate.TIME_SERIES:
             raise NotImplementedError
         all_data = self.query_all()
@@ -742,7 +744,6 @@ class DBConnector(object):
             out = None
         return out
 
-    @debug_wrapper(logger)
     def query(self, start_time, end_time=None):
         '''
         统一数据查询接口
@@ -759,13 +760,13 @@ class DBConnector(object):
         out: pd.Series or pd.DataFrame
             返回数据的类型根据查询结果而定
         '''
+        logger.debug("DBConnector.query")
         if end_time is None:
             out = self._query_cs(start_time)
         else:
             out = self._query_panel(start_time, end_time)
         return out
 
-    @debug_wrapper(logger)
     def insert(self, data):
         '''
         将数据插入到数据库文件中
@@ -776,6 +777,7 @@ class DBConnector(object):
             数据要求为数值格式(dtype以f或者i开头)，其中index为时间，要求为datetime类型，columns为
             代码列表(如果数据为pd.DataFrame)
         '''
+        logger.debug("DBConnector.insert")
         dtypes = data.dtypes
         if hasattr(dtypes, '__iter__'):  # pd.DataFrame
             dtypes = dtypes.astype(str)
@@ -794,7 +796,6 @@ class DBConnector(object):
         else:
             raise NotImplementedError
 
-    @debug_wrapper(logger)
     def _insert_df(self, data):
         '''
         将pd.DataFrame格式的数据插入到数据库文件中，仅支持PANEL类型
@@ -803,6 +804,7 @@ class DBConnector(object):
         ---------
         data: pd.DataFrame
         '''
+        logger.debug("DBConnector._insert_df")
         if self._data_category != DataCate.PANEL:
             raise UnsupportDataTypeError('{dt} is not supported by {dc}'.
                                          format(dt=type(data), dc=DataCate.PANEL.name))
@@ -856,7 +858,6 @@ class DBConnector(object):
             obj_property['symbol']['length'] = len(data.symbol_index)
         self.symbols = SymbolIndex.init_from_index(data.symbol_index)
 
-    @debug_wrapper(logger)
     def _insert_series(self, data):
         '''
         将pd.Series格式的数据插入到数据库文件中，仅支持TIME_SERIES类型
@@ -865,6 +866,7 @@ class DBConnector(object):
         ---------
         data: pd.Series
         '''
+        logger.debug("DBConnector._insert_series")
         if self._data_category != DataCate.TIME_SERIES:
             raise InvalidInputTypeError('pd.Series data is expected, you provide {}'.
                                         format(type(data)))
@@ -902,7 +904,6 @@ class DBConnector(object):
             obj_property['time']['latest_data_time'] = data_index.end_time
             obj_property['time']['length'] = end_index
 
-    @debug_wrapper(logger)
     def reshape_colsize(self, data):
         '''
         对原数据文件进行列扩容操作，仅支持PANEL，扩容程度根据配置文件进行调整
@@ -912,6 +913,7 @@ class DBConnector(object):
         data: Data
             需要添加的数据
         '''
+        logger.debug("DBConnector.reshape_colsize")
         if self._data_category == DataCate.TIME_SERIES:
             raise NotImplementedError
         if self.property['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据是出现容量不足
