@@ -180,6 +180,7 @@ class TimeIndex(DataIndex):
 
     @property
     def data(self):
+        # 外部还是可以通过一定的方法改变
         return self._data
 
 
@@ -261,6 +262,7 @@ class SymbolIndex(DataIndex):
 
     @property
     def data(self):
+        # 外部还是可以通过一定的方法改变
         return self._data
 
     def copy(self):
@@ -291,7 +293,7 @@ class Data(object):
     @classmethod
     def init_from_pd(cls, pd_data):
         '''
-        使用(排序后的)pd.DataFrame(或者pd.Series)对数据进行初始化
+        使用pd.DataFrame(或者pd.Series)对数据进行初始化
 
         Parameter
         ---------
@@ -313,7 +315,7 @@ class Data(object):
         else:
             raise UnsupportDataTypeError("Only pd.DataFrame or pd.Series is allowed, you provide {}".
                                          format(type(pd_data)))
-        obj._data = pd_data.sort_index()
+        obj._data = pd_data
         return obj
 
     @classmethod
@@ -347,7 +349,7 @@ class Data(object):
             obj._data_category = DataCate.TIME_SERIES
             value = data_dset[:]
             data = pd.Series(value, index=date_index.data)
-        obj._data = data.sort_index()
+        obj._data = data
         return obj
 
     def decompose2dataset(self):
@@ -532,7 +534,7 @@ class DBConnector(object):
         self._path = path
         self._data_category = None
         self._dtype = None
-        self.property = None   # 字典，记录数据库文件的所有属性
+        self.properties = None   # 字典，记录数据库文件的所有属性
         self.symbols = None     # 用于记录当前数据的股票代码，TIME_SERIES的该属性为None
 
     def init_from_object(self, obj):
@@ -548,7 +550,7 @@ class DBConnector(object):
         self._path = obj._path
         self._data_category = obj._data_category
         self._dtype = obj._dtype
-        self.property = deepcopy(obj.property)
+        self.properties = deepcopy(obj.properties)
         if obj.symbols is not None:
             self.symbols = obj.symbols.copy()
 
@@ -597,7 +599,7 @@ class DBConnector(object):
             # 属性初始化
             store.attrs['filled status'] = FilledStatus.EMPTY.name
             store.attrs['data category'] = obj._data_category.name
-            obj.property = {'time': {'length': 0, 'latest_data_time': None, 'start_time': None},
+            obj.properties = {'time': {'length': 0, 'latest_data_time': None, 'start_time': None},
                             'filled status': FilledStatus.EMPTY,
                             'data category': obj._data_category}
             if obj._data_category == DataCate.PANEL:   # 面板数据初始化
@@ -610,7 +612,7 @@ class DBConnector(object):
                 store['symbol'].attrs['length'] = 0
                 store['data'].attrs['dtype'] = str(obj._dtype)
                 store['data'][...] = np.nan
-                obj.property.update({'column size': init_col_size,
+                obj.properties.update({'column size': init_col_size,
                                      'symbol': {'length': 0},
                                      'data': {'dtype': obj._dtype}})
             else:
@@ -619,7 +621,7 @@ class DBConnector(object):
                 store.attrs['column size'] = 1
                 store['data'].attrs['dtype'] = str(obj._dtype)
                 store['data'][...] = np.nan
-                obj.property.update({'column size': 1, 'data': {'dtype': obj._dtype}})
+                obj.properties.update({'column size': 1, 'data': {'dtype': obj._dtype}})
         return obj
 
     @classmethod
@@ -644,7 +646,7 @@ class DBConnector(object):
             obj._data_category = DataCate[store.attrs['data category']]
             obj._dtype = store['data'].attrs['dtype']
             time_dset = store['time']
-            obj.property = {'time': {'length': store['time'].attrs['length'],
+            obj.properties = {'time': {'length': store['time'].attrs['length'],
                                      'latest_data_time': pd.to_datetime(time_dset.attrs['latest_data_time']),
                                      'start_time': pd.to_datetime(time_dset.attrs['start_time'])},
                             'filled status': FilledStatus[store.attrs['filled status']],
@@ -652,7 +654,7 @@ class DBConnector(object):
                             'column size': store.attrs['column size'],
                             'data': {'dtype': np.dtype(obj._dtype)}}
             if obj._data_category == DataCate.PANEL:
-                obj.property.update({'symbol': {'length': store['symbol'].attrs['length']}})
+                obj.properties.update({'symbol': {'length': store['symbol'].attrs['length']}})
                 obj.symbols = SymbolIndex.init_from_dataset(store['symbol'])
         except OSError:
             raise FileNotFoundError
@@ -670,7 +672,7 @@ class DBConnector(object):
         '''
         logger.debug("DBConnector.query_all")
         try:
-            if self.property['filled status'] == FilledStatus.EMPTY:
+            if self.properties['filled status'] == FilledStatus.EMPTY:
                 return None
             store = h5py.File(self._path, 'r')
             # 加载日期数据
@@ -788,7 +790,7 @@ class DBConnector(object):
                                  for s in DB_CONFIG['valid_type_header']])
         if not is_valid_type:
             raise UnsupportDataTypeError('Data type is not supported!')
-        data = data.astype(self._dtype)
+        # data = data.astype(self._dtype)
         if isinstance(data, pd.DataFrame):
             self._insert_df(data)
         elif isinstance(data, pd.Series):
@@ -808,8 +810,8 @@ class DBConnector(object):
         if self._data_category != DataCate.PANEL:
             raise UnsupportDataTypeError('{dt} is not supported by {dc}'.
                                          format(dt=type(data), dc=DataCate.PANEL.name))
-        data = Data.init_from_pd(data)  # 获取数据
-        obj_property = self.property
+        data = Data.init_from_pd(data).as_type(self._dtype)  # 获取数据
+        obj_property = self.properties
         if len(data.symbol_index) > obj_property['column size']:    # 数据列超过文件列容量
             import warnings
             warnings.warn('Data column needs to be resized!', RuntimeWarning)
@@ -870,8 +872,8 @@ class DBConnector(object):
         if self._data_category != DataCate.TIME_SERIES:
             raise InvalidInputTypeError('pd.Series data is expected, you provide {}'.
                                         format(type(data)))
-        obj_property = self.property
-        data = Data.init_from_pd(data)
+        obj_property = self.properties
+        data = Data.init_from_pd(data).as_type(self._dtype)
         if obj_property['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据
             data.drop_before_date(obj_property['time']['latest_data_time'])
             if len(data) == 0:
@@ -916,13 +918,13 @@ class DBConnector(object):
         logger.debug("DBConnector.reshape_colsize")
         if self._data_category == DataCate.TIME_SERIES:
             raise NotImplementedError
-        if self.property['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据是出现容量不足
+        if self.properties['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据是出现容量不足
             db_data = self.query_all()
             if db_data is not None:
                 db_data = Data.init_from_pd(db_data)
                 data.update(db_data)
         remove(self._path)
-        new_size = self.property['column size'] + DB_CONFIG['col_size_increase_step']
+        new_size = self.properties['column size'] + DB_CONFIG['col_size_increase_step']
         obj = DBConnector.create_datafile(self._path, self._data_category, self._dtype, new_size)
         self.init_from_object(obj)
         self.insert(data.data)

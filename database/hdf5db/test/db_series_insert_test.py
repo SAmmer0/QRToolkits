@@ -4,7 +4,7 @@
 # @Author  : Hao Li (howardlee_h@outlook.com)
 # @Link    : https://github.com/SAmmer0
 # @Version : $Id$
-from os import remove
+import os
 
 from database.hdf5db.dbcore import *
 from fmanager import query
@@ -18,8 +18,9 @@ sample_series = query(TEST_FACTOR, (start_time, end_time)).iloc[:, 0]
 new_sample_series = query(TEST_FACTOR, (start_time, new_end)).iloc[:, 0]
 
 db_path = r'C:\Users\c\Desktop\test\test_series.h5'
-# remove(db_path)
-# db = DBConnector.create_datafile(db_path, DataCate.TIME_SERIES)
-db = DBConnector.init_from_file(db_path)
-# db.insert(sample_series)
-db.insert(new_sample_series)
+if os.path.exists(db_path):
+    os.remove(db_path)
+db = DBConnector.create_datafile(db_path, DataCate.TIME_SERIES)
+# db = DBConnector.init_from_file(db_path)
+db.insert(sample_series)
+# db.insert(new_sample_series)
