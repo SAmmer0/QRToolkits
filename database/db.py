@@ -82,5 +82,39 @@ class StoreFormat(object):
         validated: boolean
             若符合规则，返回True，反之返回False
         '''
-        
+        last_cate = None
+        rule = self._rule
+        for cate in self._data:
+            if last_cate is None:
+                last_cate = cate
+                pass
+            if cate not in rule[cate]:
+                return False
+            last_cate = cate
+        return True
+    
+    def __eq__(self, other):
+        for cate1, cate2 in zip(self, other):
+            if cate1 != cate2:
+                return False
+            return True
+    
+    def __iter__(self):
+        return iter(self._data)
+    
+    def __hash__(self):
+        return hash(self._data)
+    
+    @property
+    def data(self):
+        return self._data
+    
+    @property
+    def level(self):
+        return len(self._data)
+    
 
+class ParamsParser(object):
+    '''
+    参数解析类
+    '''

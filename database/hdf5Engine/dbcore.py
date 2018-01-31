@@ -16,8 +16,9 @@ import pandas as pd
 import h5py
 import numpy as np
 
-from database.hdf5engine.const import LOGGER_NAME, DB_CONFIG, DataFormatCategory, FilledStatus, NaS
-from database.hdf5engine.exceptions import InvalidInputTypeError, UnsupportDataTypeError
+from database.hdf5Engine.const import LOGGER_NAME, DB_CONFIG, DataFormatCategory, FilledStatus, NaS
+from database.hdf5Engine.exceptions import InvalidInputTypeError, UnsupportDataTypeError
+from database.db import DBEngine
 
 # 获取当前日志句柄
 logger = logging.getLogger(LOGGER_NAME)
@@ -501,7 +502,7 @@ class Data(object):
         return len(self._data)
 
 
-class HDF5Engine(object):
+class HDF5Engine(DBEngine):
     '''
     数据库文件管理类
 
