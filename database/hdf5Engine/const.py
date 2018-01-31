@@ -10,7 +10,7 @@ from os.path import dirname
 import enum
 
 from database.utils import submodule_initialization, set_logger
-from database.const import DataCate, NaS
+from database.const import DataFormatCategory, NaS
 
 SUBMODULE_NAME = 'hdf5db'
 # 设置日志选项

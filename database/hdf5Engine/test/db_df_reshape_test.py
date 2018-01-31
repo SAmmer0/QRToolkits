@@ -27,20 +27,20 @@ def first_insert():
     columns = list(data.columns)
     shuffle(columns)
     data = data.loc[:, columns]
-    db = DBConnector.create_datafile(db_path, DataCate.PANEL)
+    db = HDF5Engine.create_datafile(db_path, DataFormatCategory.PANEL)
     db.insert(data)
 
 
 def second_insert():
     data = query(test_factor, (start_time, second_end_time))
-    db = DBConnector.init_from_file(db_path)
+    db = HDF5Engine.init_from_file(db_path)
     db.insert(data)
 
 
 def query_compare():
     old_db_data = query(test_factor, (start_time, second_end_time))
     threshold_loc = old_db_data.index.get_loc(first_end_time) + 1
-    db = DBConnector.init_from_file(db_path)
+    db = HDF5Engine.init_from_file(db_path)
     new_db_data = db.query(start_time, second_end_time)
     old_db_data = old_db_data.fillna(0)
     new_db_data = new_db_data.fillna(0)

@@ -17,5 +17,5 @@ sample_df = query(TEST_FACTOR, (start_time, end_time))
 
 db_path = r'C:\Users\c\Desktop\test\test.h5'
 remove(db_path)
-db = DBConnector.create_datafile(db_path, DataCate.PANEL)
+db = HDF5Engine.create_datafile(db_path, DataFormatCategory.PANEL)
 db.insert(sample_df)

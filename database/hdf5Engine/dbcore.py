@@ -16,8 +16,8 @@ import pandas as pd
 import h5py
 import numpy as np
 
-from database.hdf5db.const import LOGGER_NAME, DB_CONFIG, DataCate, FilledStatus, NaS
-from database.hdf5db.exceptions import InvalidInputTypeError, UnsupportDataTypeError
+from database.hdf5engine.const import LOGGER_NAME, DB_CONFIG, DataFormatCategory, FilledStatus, NaS
+from database.hdf5engine.exceptions import InvalidInputTypeError, UnsupportDataTypeError
 
 # 获取当前日志句柄
 logger = logging.getLogger(LOGGER_NAME)
@@ -309,9 +309,9 @@ class Data(object):
         logger.debug("Data.init_from_pd")
         obj = cls()
         if isinstance(pd_data, pd.DataFrame):
-            obj._data_category = DataCate.PANEL
+            obj._data_category = DataFormatCategory.PANEL
         elif isinstance(pd_data, pd.Series):
-            obj._data_category = DataCate.TIME_SERIES
+            obj._data_category = DataFormatCategory.TIME_SERIES
         else:
             raise UnsupportDataTypeError("Only pd.DataFrame or pd.Series is allowed, you provide {}".
                                          format(type(pd_data)))
@@ -341,12 +341,12 @@ class Data(object):
         obj = cls()
         date_index = TimeIndex.init_from_dataset(date_dset)
         if symbol_dset is not None:
-            obj._data_category = DataCate.PANEL
+            obj._data_category = DataFormatCategory.PANEL
             symbol_index = SymbolIndex.init_from_dataset(symbol_dset)
             value = data_dset[:, :symbol_index.length]
             data = pd.DataFrame(value, index=date_index.data, columns=symbol_index.data)
         else:
-            obj._data_category = DataCate.TIME_SERIES
+            obj._data_category = DataFormatCategory.TIME_SERIES
             value = data_dset[:]
             data = pd.Series(value, index=date_index.data)
         obj._data = data
@@ -368,7 +368,7 @@ class Data(object):
         logger.debug("Data.decompose2dataset")
         data = self._data.values
         date_index = TimeIndex.init_from_index(self._data.index)
-        if self._data_category == DataCate.PANEL:
+        if self._data_category == DataFormatCategory.PANEL:
             symbol_index = SymbolIndex.init_from_index(self._data.columns)
         else:
             symbol_index = None
@@ -388,7 +388,7 @@ class Data(object):
             给定的代码排列顺序
         '''
         logger.debug("Data.rearrange_symbol")
-        if self._data_category == DataCate.TIME_SERIES:
+        if self._data_category == DataFormatCategory.TIME_SERIES:
             raise NotImplementedError
 
         diff = sorted(self._data.columns.difference(symbol_order))
@@ -430,7 +430,7 @@ class Data(object):
             warnings.warn('Improper time order', RuntimeWarning)
             return
         self.drop_before_date(other.end_time)
-        if self.data_category == DataCate.PANEL:
+        if self.data_category == DataFormatCategory.PANEL:
             self.rearrange_symbol(other.symbol_index)
             other.rearrange_symbol(self.symbol_index)   # 保证合并后的顺序一致
         data = pd.concat([other.data, self._data], axis=0)
@@ -485,7 +485,7 @@ class Data(object):
 
     @property
     def symbol_index(self):
-        if self.data_category == DataCate.PANEL:
+        if self.data_category == DataFormatCategory.PANEL:
             return self._data.columns
         else:
             return None
@@ -501,7 +501,7 @@ class Data(object):
         return len(self._data)
 
 
-class DBConnector(object):
+class HDF5Engine(object):
     '''
     数据库文件管理类
 
@@ -564,7 +564,7 @@ class DBConnector(object):
         ---------
         path: string
             文件的路径
-        data_category: DataCate
+        data_category: DataFormatCategory
             数据类别，目前支持[PANEL, TIME_SERIES]
         dtype: np.dtype
             数据类型
@@ -578,7 +578,7 @@ class DBConnector(object):
         '''
         logger.debug("DBConnector.create_datafile")
         obj = cls(path)
-        valid_category = [DataCate.PANEL, DataCate.TIME_SERIES]
+        valid_category = [DataFormatCategory.PANEL, DataFormatCategory.TIME_SERIES]
         if data_category not in valid_category:
             raise InvalidInputTypeError('Unsupport data category, expect {exp}, you provide {yp}'.
                                         format(exp=valid_category, yp=data_category))
@@ -602,7 +602,7 @@ class DBConnector(object):
             obj.properties = {'time': {'length': 0, 'latest_data_time': None, 'start_time': None},
                             'filled status': FilledStatus.EMPTY,
                             'data category': obj._data_category}
-            if obj._data_category == DataCate.PANEL:   # 面板数据初始化
+            if obj._data_category == DataFormatCategory.PANEL:   # 面板数据初始化
                 store.create_dataset('symbol', shape=(1, ), maxshape=(None, ),
                                      dtype=DB_CONFIG['symbol_dtype'])
                 store.create_dataset('data', shape=(1, init_col_size),
@@ -643,17 +643,17 @@ class DBConnector(object):
         obj = cls(path)
         try:
             store = h5py.File(path, 'r')
-            obj._data_category = DataCate[store.attrs['data category']]
+            obj._data_category = DataFormatCategory[store.attrs['data category']]
             obj._dtype = store['data'].attrs['dtype']
             time_dset = store['time']
             obj.properties = {'time': {'length': store['time'].attrs['length'],
                                      'latest_data_time': pd.to_datetime(time_dset.attrs['latest_data_time']),
                                      'start_time': pd.to_datetime(time_dset.attrs['start_time'])},
                             'filled status': FilledStatus[store.attrs['filled status']],
-                            'data category': DataCate[store.attrs['data category']],
+                            'data category': DataFormatCategory[store.attrs['data category']],
                             'column size': store.attrs['column size'],
                             'data': {'dtype': np.dtype(obj._dtype)}}
-            if obj._data_category == DataCate.PANEL:
+            if obj._data_category == DataFormatCategory.PANEL:
                 obj.properties.update({'symbol': {'length': store['symbol'].attrs['length']}})
                 obj.symbols = SymbolIndex.init_from_dataset(store['symbol'])
         except OSError:
@@ -677,12 +677,12 @@ class DBConnector(object):
             store = h5py.File(self._path, 'r')
             # 加载日期数据
             date_dset = store['time']
-            if self._data_category == DataCate.PANEL:
+            if self._data_category == DataFormatCategory.PANEL:
                 symbol_dset = store['symbol']
                 data_dset = store['data']
                 data = Data.init_from_datasets(data_dset, date_dset, symbol_dset)
                 out = data.data
-            elif self._data_category == DataCate.TIME_SERIES:
+            elif self._data_category == DataFormatCategory.TIME_SERIES:
                 data_dset = store['data']
                 data = Data.init_from_datasets(data_dset, date_dset)
                 out = data.data
@@ -735,7 +735,7 @@ class DBConnector(object):
             横截面数据，若没有则返回None
         '''
         logger.debug("DBConnector._query_cs")
-        if self._data_category == DataCate.TIME_SERIES:
+        if self._data_category == DataFormatCategory.TIME_SERIES:
             raise NotImplementedError
         all_data = self.query_all()
         if all_data is None:
@@ -807,9 +807,9 @@ class DBConnector(object):
         data: pd.DataFrame
         '''
         logger.debug("DBConnector._insert_df")
-        if self._data_category != DataCate.PANEL:
+        if self._data_category != DataFormatCategory.PANEL:
             raise UnsupportDataTypeError('{dt} is not supported by {dc}'.
-                                         format(dt=type(data), dc=DataCate.PANEL.name))
+                                         format(dt=type(data), dc=DataFormatCategory.PANEL.name))
         data = Data.init_from_pd(data).as_type(self._dtype)  # 获取数据
         obj_property = self.properties
         if len(data.symbol_index) > obj_property['column size']:    # 数据列超过文件列容量
@@ -869,7 +869,7 @@ class DBConnector(object):
         data: pd.Series
         '''
         logger.debug("DBConnector._insert_series")
-        if self._data_category != DataCate.TIME_SERIES:
+        if self._data_category != DataFormatCategory.TIME_SERIES:
             raise InvalidInputTypeError('pd.Series data is expected, you provide {}'.
                                         format(type(data)))
         obj_property = self.properties
@@ -916,7 +916,7 @@ class DBConnector(object):
             需要添加的数据
         '''
         logger.debug("DBConnector.reshape_colsize")
-        if self._data_category == DataCate.TIME_SERIES:
+        if self._data_category == DataFormatCategory.TIME_SERIES:
             raise NotImplementedError
         if self.properties['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据是出现容量不足
             db_data = self.query_all()
@@ -925,6 +925,6 @@ class DBConnector(object):
                 data.update(db_data)
         remove(self._path)
         new_size = self.properties['column size'] + DB_CONFIG['col_size_increase_step']
-        obj = DBConnector.create_datafile(self._path, self._data_category, self._dtype, new_size)
+        obj = HDF5Engine.create_datafile(self._path, self._data_category, self._dtype, new_size)
         self.init_from_object(obj)
         self.insert(data.data)

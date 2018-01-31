@@ -20,9 +20,19 @@ if CONFIG_PATH.startswith(REL_PATH_HEADER):
 # 设置模块名称，主要用于日志记录中
 MODULE_NAME = 'qrt_database'
 
-# 数据分类: 时间序列数据、面板数据
+# 数据形式分类: 时间序列数据、面板数据
 
 
-class DataCate(enum.Enum):
+class DataFormatCategory(enum.Enum):
     PANEL = enum.auto()
     TIME_SERIES = enum.auto()
+
+# 数值类型分类: 数字型、字符型
+class DataValueCategory(enum.Enum):
+    NUMERIC = enum.auto()
+    CHAR = enum.auto()
+
+# 数据分类: 结构化数据、非结构化数据
+class DataClassification(enum.Enum):
+    STRUCTURED = enum.auto()
+    UNSTRUCTURED = enum.auto()

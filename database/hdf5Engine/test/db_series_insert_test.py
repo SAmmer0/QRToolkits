@@ -20,7 +20,7 @@ new_sample_series = query(TEST_FACTOR, (start_time, new_end)).iloc[:, 0]
 db_path = r'C:\Users\c\Desktop\test\test_series.h5'
 if os.path.exists(db_path):
     os.remove(db_path)
-db = DBConnector.create_datafile(db_path, DataCate.TIME_SERIES)
+db = HDF5Engine.create_datafile(db_path, DataFormatCategory.TIME_SERIES)
 # db = DBConnector.init_from_file(db_path)
 db.insert(sample_series)
 # db.insert(new_sample_series)

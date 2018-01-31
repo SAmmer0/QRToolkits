@@ -11,5 +11,5 @@ start_time = '2017-03-01'
 end_time = '2017-12-30'
 
 db_path = r'C:\Users\c\Desktop\test\test.h5'
-db = DBConnector.init_from_file(db_path)
+db = HDF5Engine.init_from_file(db_path)
 data = db.query(start_time, end_time)
