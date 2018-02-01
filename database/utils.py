@@ -9,6 +9,7 @@ Created on Thu Jan 11 16:21:55 2018
 import logging
 from os import sep
 from sys import stdout
+import abc
 
 import qrtutils
 from database.const import CONFIG_PATH, MODULE_NAME
@@ -85,5 +86,25 @@ def set_logger(log_config):
         handler.setFormatter(formatter)
     logger.addHandler(handler)
     return logger.name
+
+class DBEngine(object, metaclass=abc.ABCMeta):
+    '''
+    数据引擎虚基类，定义了query和insert两个数据处理接口
+    '''
+    @abc.abstractclassmethod
+    def query(self, *args, **kwargs):
+        '''
+        使用数据引擎从数据文件或者数据库中获取数据
+        '''
+        pass
+    
+    @abc.abstractclassmethod
+    def insert(self, *args, **kwargs):
+        '''
+        通过数据引擎将数据插入到数据文件或者数据库中，返回布尔值显示是否插入成功
+        '''
+        pass
+    
+
     
     
