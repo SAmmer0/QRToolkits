@@ -8,29 +8,12 @@ Database: 主数据库
 StoreFormat: 数据存储类型
 ParamsParser: 通用参数类
 '''
-import abc
 import enum
 
-from database.const import DataClassification, DataValueCategory
+from pandas import to_datetime
 
-class DBEngine(object, metaclass=abc.ABCMeta):
-    '''
-    数据引擎虚基类，定义了query和insert两个数据处理接口
-    '''
-    @abc.abstractclassmethod
-    def query(self, *args, **kwargs):
-        '''
-        使用数据引擎从数据文件或者数据库中获取数据
-        '''
-        pass
-    
-    @abc.abstractclassmethod
-    def insert(self, *args, **kwargs):
-        '''
-        通过数据引擎将数据插入到数据文件或者数据库中，返回布尔值显示是否插入成功
-        '''
-        pass
-    
+from database.const import DataClassification, DataValueCategory
+from database.hdf5Engine.dbcore import HDF5Engine
 
 class StoreFormat(object):
     '''
@@ -102,9 +85,6 @@ class StoreFormat(object):
     def __iter__(self):
         return iter(self._data)
     
-    def __hash__(self):
-        return hash(self._data)
-    
     @property
     def data(self):
         return self._data
@@ -116,5 +96,92 @@ class StoreFormat(object):
 
 class ParamsParser(object):
     '''
-    参数解析类
+    参数解析类，用于对传入数据库引擎的数据进行包装
+    
+    该类提供一下方法: 
+    from_dict: 类方法，从参数字典中对对象进行初始化
+    get_engine: 通过定义的规则获取对应的数据引擎
+    parse_relpath: 将相对路径解析为绝对路径
+    '''
+    def __init__(self):
+        self._db_path = None
+        self._start_time = None
+        self._end_time = None
+        self._engine_map_rule = {(DataClassification.STRUCTURED, DataValueCategory.NUMERIC): HDF5Engine}
+        self._store_fmt = None
+        self._abs_path = None
+    
+    @classmethod
+    def from_dict(cls, db_path, params):
+        '''
+        使用字典类型的参数数据构造参数解析类
+        
+        Parameter
+        ---------
+        db_path: string
+            数据库的绝对路径
+        params: dict
+            字典类型的参数，参数域包含['rel_path'(必须), 'start_time', 'end_time', 'store_fmt']
+        
+        Return
+        ------
+        obj: ParamsParser
+        '''
+        obj = cls()
+        obj._db_path = db_path
+        obj._start_time = params['start_time']
+        if obj._start_time is not None:
+            obj._start_time = to_datetime(obj._start_time)
+        obj._end_time = params['start_time']
+        if obj._end_time is not None:
+            obj._end_time = to_datetime(obj._end_time)
+        obj._abs_path = obj._parse_relpath(params['rel_path'])
+        obj._store_fmt = params['store_fmt']
+        return obj
+    
+    def get_engine(self):
+        '''
+        获取对应的数据库引擎
+        '''
+        return self._engine_map_rule[self._store_fmt.data]
+    
+    def _parse_relpath(self, rel_path):
+        '''
+        计算绝对路径
+        
+        Parameter
+        ---------
+        rel_path: string
+           相对路径的格式为dir.dir.filename
+        
+        Return
+        ------
+        abs_path: string
+            绝对路径
+        '''
+        from os import sep
+        from os.path import join
+        rel_path = rel_path.replace('.', sep)
+        return join(self._db_path, rel_path)
+
+    @property
+    def start_time(self):
+        return self._start_time
+    
+    @property
+    def end_time(self):
+        return self._end_time
+    
+    @property
+    def absolute_path(self):
+        return self._abs_path
+    
+    @property
+    def store_fmt(self):
+        return self._store_fmt
+        
+
+class Database(object):
+    '''
+    主数据库接口类，用于处理与外界的交互
     '''
