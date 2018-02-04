@@ -9,6 +9,8 @@ StoreFormat: 数据存储类型
 ParamsParser: 通用参数类
 '''
 import enum
+import os.path as path
+import os.remove as os_remove
 
 from pandas import to_datetime
 
@@ -93,6 +95,20 @@ class StoreFormat(object):
     def level(self):
         return len(self._data)
     
+    def __getitem__(self, level):
+        '''
+        获取给定level的分类值
+        
+        Parameter
+        ---------
+        level: int
+            所需要获取的分类的等级，0表示第一级，1表示第二级，...，以此类推
+            
+        Return
+        ------
+        out: enum.Enum
+        '''
+        return self._data[level]
 
 class ParamsParser(object):
     '''
@@ -108,6 +124,11 @@ class ParamsParser(object):
         self._start_time = None
         self._end_time = None
         self._engine_map_rule = {(DataClassification.STRUCTURED, DataValueCategory.NUMERIC): HDF5Engine}
+        # 参数组合校验字典，键为(start_time is None, end_time is None)，值为对应的存储类型
+        self._validation_rule = {(False, False): StoreFormat.from_iterable((DataClassification.STRUCTURED, )),
+                                 (True, False): StoreFormat.from_iterable((DataClassification.STRUCTURED,)),
+                                 (False, True): StoreFormat.from_iterable((DataClassification.STRUCTURED,)),
+                                 (True, True): StoreFormat.from_iterable((DataClassification.UNSTRUCTURED,))}
         self._store_fmt = None
         self._abs_path = None
     
@@ -121,7 +142,7 @@ class ParamsParser(object):
         db_path: string
             数据库的绝对路径
         params: dict
-            字典类型的参数，参数域包含['rel_path'(必须), 'start_time', 'end_time', 'store_fmt']
+            字典类型的参数，参数域包含['rel_path'(必须)(string), 'start_time'(datetime), 'end_time'(datetime), 'store_fmt'(StoreFormat)]
         
         Return
         ------
@@ -129,14 +150,16 @@ class ParamsParser(object):
         '''
         obj = cls()
         obj._db_path = db_path
-        obj._start_time = params['start_time']
+        obj._start_time = params.get('start_time', None)
         if obj._start_time is not None:
             obj._start_time = to_datetime(obj._start_time)
-        obj._end_time = params['start_time']
+        obj._end_time = params.get('end_time', None)
         if obj._end_time is not None:
             obj._end_time = to_datetime(obj._end_time)
         obj._abs_path = obj._parse_relpath(params['rel_path'])
-        obj._store_fmt = params['store_fmt']
+        obj._store_fmt = params.get('store_fmt', None)
+        if not obj._check_parameters():
+            raise ValueError("Invalid parameter group!")
         return obj
     
     def get_engine(self):
@@ -164,6 +187,19 @@ class ParamsParser(object):
         rel_path = rel_path.replace('.', sep)
         return join(self._db_path, rel_path)
 
+    def _check_parameters(self):
+        '''
+        检查参数组合的合法性，包含数据类型组合的合法性以及时间参数与对应的引擎组合的合法性
+        '''
+        if self.store_fmt is None:  # 此时没有提供store_fmt参数，因此不需要检查
+            return True
+        if not self.store_fmt.validate():
+            return False
+        time_tuple = (self.start_time is None, self.end_time is None)
+        dclassification = self._validation_rule[time_tuple]
+        return dclassification[0] == self.store_fmt[0]
+        
+
     @property
     def start_time(self):
         return self._start_time
@@ -184,4 +220,113 @@ class ParamsParser(object):
 class Database(object):
     '''
     主数据库接口类，用于处理与外界的交互
+    目前支持以下方法: 
+    query: 获取请求的数据
+    insert: 将数据存储到本地
+    remove_data: 将给定路径的数据删除
+    move_to: 将给定的数据移动到其他位置
+    
+    Parameter
+    ---------
+    db_path: string
+        数据的存储路径
     '''
+    def __init__(self, db_path):
+        self._db_path = db_path
+    
+    def query(self, rel_path, store_fmt, start_time=None, end_time=None):
+        '''
+        查询数据接口
+        
+        Parameter
+        ---------
+        rel_path: string
+            该数据在数据库中的相对路径，路径格式为db.sub_dir.sub_dir.sub_data
+        store_fmt: StoreFormat or iterable
+            数据存储格式分类
+        start_time: datetime like
+            数据开始时间(可选)
+        end_time: datetime like
+            数据结束时间(可选)
+        
+        Return
+        ------
+        out: pandas.Series, pandas.DataFrame or object
+        '''
+        params = ParamsParser.from_dict(self._db_path, {'rel_path': rel_path, 
+                                                        'store_fmt': store_fmt,
+                                                        'start_time': start_time, 
+                                                        'end_time': end_time})
+        engine = params.get_engine()
+        data = engine.query(params)
+        return data
+    
+    def insert(self, data, rel_path, store_fmt):
+        '''
+        存储数据接口
+        
+        Parameter
+        ---------
+        data: pandas.Series, pandas.DataFrame or object
+            需要插入的数据
+        rel_path: string
+            数据的相对路径
+        store_fmt: StoreFormat or iterable
+            数据存储格式分类
+        
+        Return
+        ------
+        issuccess: boolean
+            是否成功插入数据，True表示成功
+        '''
+        params = ParamsParser.from_dict(self._db_path, {'rel_path': rel_path,
+                                                        'store_fmt': store_fmt})
+        engine = params.get_engine()
+        issuccess = engine.insert(data, params)
+        return issuccess
+    
+    def remove_data(self, rel_path, store_fmt):
+        '''
+        将给定路径的数据删除
+        
+        Parameter
+        ---------
+        rel_path: string
+            数据的相对路径
+        store_fmt: StoreFormat
+            数据存储方式分类
+        
+        Return
+        ------
+        issuccess: boolean
+        '''
+        params = ParamsParser.from_dict(self._db_path, {'rel_path': rel_path,
+                                                        'store_fmt': store_fmt})
+        engine = params.get_engine()
+        issuccess = engine.remove_data(params)
+        return issuccess
+        
+    
+    def move_to(self, source_rel_path, dest_rel_path, store_fmt):
+        '''
+        将数据有原路径移动到新的路径下
+        
+        source_rel_path: string
+            原存储位置的相对路径
+        dest_rel_path: string
+            目标存储位置的相对路径
+        store_fmt: StoreFormat
+            数据存储方式分类
+        
+        Return
+        ------
+        issuccess: boolean
+        '''
+        src_params = ParamsParser.from_dict(self._db_path, {'rel_path': source_rel_path, 
+                                                            'store_fmt': store_fmt})
+        dest_params = ParamsParser.from_dict(self._db_path, {'rel_path': dest_rel_path,
+                                                             'store_fmt': store_fmt})
+        engine = src_params.get_engine()
+        issuccess = engine.move_to(src_params, dest_params)
+        return issuccess
+        
