@@ -13,8 +13,9 @@ import os.path as path
 import os.remove as os_remove
 
 from pandas import to_datetime
+from numpy import dtype as np_dtype
 
-from database.const import DataClassification, DataValueCategory
+from database.const import DataClassification, DataValueCategory, DataFormatCategory
 from database.hdf5Engine.dbcore import HDF5Engine
 
 class StoreFormat(object):
@@ -29,11 +30,13 @@ class StoreFormat(object):
     
     Notes
     -----
-    目前只支持两层分类，第一层为DataClassfication，第二层为DataValueCategory
+    目前只支持三层分类，第一层为DataClassfication，第二层为DataValueCategory，第三层为DataFormatCategory
     '''
     def __init__(self):
         self._rule = {DataClassification.STRUCTURED: [DataValueCategory.CHAR, DataValueCategory.NUMERIC],
-                      DataClassification.UNSTRUCTURED: [None]}
+                      DataClassification.UNSTRUCTURED: [None],
+                      DataValueCategory.CHAR: [DataFormatCategory.PANEL, DataFormatCategory.TIME_SERIES],
+                      DataValueCategory.NUMERIC: [DataFormatCategory.PANEL, DataFormatCategory.TIME_SERIES]}
         self._data = None
         
     @classmethod
@@ -73,7 +76,7 @@ class StoreFormat(object):
             if last_cate is None:
                 last_cate = cate
                 pass
-            if cate not in rule[cate]:
+            if cate not in rule[last_cate]:
                 return False
             last_cate = cate
         return True
@@ -131,6 +134,7 @@ class ParamsParser(object):
                                  (True, True): StoreFormat.from_iterable((DataClassification.UNSTRUCTURED,))}
         self._store_fmt = None
         self._abs_path = None
+        self._dtype = None
     
     @classmethod
     def from_dict(cls, db_path, params):
@@ -142,7 +146,7 @@ class ParamsParser(object):
         db_path: string
             数据库的绝对路径
         params: dict
-            字典类型的参数，参数域包含['rel_path'(必须)(string), 'start_time'(datetime), 'end_time'(datetime), 'store_fmt'(StoreFormat)]
+            字典类型的参数，参数域包含['rel_path'(必须)(string), 'start_time'(datetime), 'end_time'(datetime), 'store_fmt'(StoreFormat), 'dtype'(numpy.dtype)]
         
         Return
         ------
@@ -158,6 +162,9 @@ class ParamsParser(object):
             obj._end_time = to_datetime(obj._end_time)
         obj._abs_path = obj._parse_relpath(params['rel_path'])
         obj._store_fmt = params.get('store_fmt', None)
+        obj._dtype = params.get('dtype', None)
+        if obj._dtype is not None:
+            obj._dtype = np_dtype(obj._dtype)
         if not obj._check_parameters():
             raise ValueError("Invalid parameter group!")
         return obj
@@ -215,6 +222,10 @@ class ParamsParser(object):
     @property
     def store_fmt(self):
         return self._store_fmt
+    
+    @property
+    def dtype(self):
+        return self._dtype
         
 
 class Database(object):
@@ -261,7 +272,7 @@ class Database(object):
         data = engine.query(params)
         return data
     
-    def insert(self, data, rel_path, store_fmt):
+    def insert(self, data, rel_path, store_fmt, dtype):
         '''
         存储数据接口
         
@@ -273,14 +284,16 @@ class Database(object):
             数据的相对路径
         store_fmt: StoreFormat or iterable
             数据存储格式分类
-        
+        dtype: numpy.dtype like
+            数据存储类型
         Return
         ------
         issuccess: boolean
             是否成功插入数据，True表示成功
         '''
         params = ParamsParser.from_dict(self._db_path, {'rel_path': rel_path,
-                                                        'store_fmt': store_fmt})
+                                                        'store_fmt': store_fmt,
+                                                        'dtype': dtype})
         engine = params.get_engine()
         issuccess = engine.insert(data, params)
         return issuccess
