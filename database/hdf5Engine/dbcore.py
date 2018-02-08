@@ -502,6 +502,233 @@ class Data(object):
         return len(self._data)
 
 
+class Reader(object):
+    '''
+    读取器类，负责从数据文件中读取数据
+    '''
+    def __init__(self, params):
+        self.properties = None
+        self._params = params
+        self.symbols = None
+        self._load_property()
+        
+    def _load_property(self):
+        '''
+        从数据文件中加载元数据
+        '''
+        try:
+            store = h5py.File(params.absolute_path, 'r')
+            time_dset = store['time']
+            self.properties = {'time': {'length': store['time'].attrs['length'],
+                                     'latest_data_time': pd.to_datetime(time_dset.attrs['latest_data_time']),
+                                     'start_time': pd.to_datetime(time_dset.attrs['start_time'])},
+                            'filled status': FilledStatus[store.attrs['filled status']],
+                            'data category': DataFormatCategory[store.attrs['data category']],
+                            'column size': store.attrs['column size'],
+                            'data': {'dtype': np.dtype(self._dtype)}}
+            if self._params.store_fmt[-1] == DataFormatCategory.PANLE: # 这里假设最后一级存储格式为DataFromatCategory类型
+                self.properties.update({'symbol': {'length': store['symbol'].attrs['length']}})
+                self.symbols = SymbolIndex.init_from_dataset(store['symbol'])                
+        except OSError:
+            raise FileNotFoundError
+        except Exception as e:
+            store.close()
+            raise e
+    
+    def query_all(self):
+        '''
+        根据传入给本对象的相关参数，从数据文件中查询所有数据，并根据数据的分类返回恰当的格式，PANEL->pd.DataFrame，
+        TS->pd.Series
+
+        Return
+        ------
+        out: pd.DataFrame or pd.Series
+            数据文件中存储的所有数据，若没有填充任何数据，则返回None
+        '''
+        try:
+            tmp_properties = self.properties
+            if tmp_properties['filled status'] == FilledStatus.EMPTY:
+                logger.debug("Query an empty data file(file_path = {}).".format(self._params.absolute_path))
+                return None
+            store = h5py.File(self._params.absolute_path, 'r')
+            # 加载日期数据
+            date_dset = store['time']
+            if tmp_properties['data category'] == DataFormatCategory.PANEL:
+                symbol_dset = store['symbol']
+                data_dset = store['data']
+                data = Data.init_from_datasets(data_dset, date_dset, symbol_dset)
+                out = data.data
+            elif tmp_properties['data category'] == DataFormatCategory.TIME_SERIES:
+                data_dset = store['data']
+                data = Data.init_from_datasets(data_dset, date_dset)
+                out = data.data
+            else:
+                raise NotImplementedError
+        finally:
+            store.close()
+        return out
+    
+    def query(self):
+        '''
+        根据传入给本对象的相关参数，从数据文件中查询请求的数据，并根据数据的分类返回恰当的格式，PANEL->pd.DataFrame，
+        TS->pd.Series
+
+        Return
+        ------
+        out: pd.DataFrame or pd.Series
+            数据文件中存储的所有数据，若没有填充任何数据，则返回None
+        '''
+        params = self._params
+        if (self.properties['data category'] == DataFormatCategory.PANEL and 
+            params.start_time is None and params.end_time is not None):  # 请求横截面数据
+            all_data = self.query_all()
+            try:
+                out = all_data.loc[params.start_time]
+            except KeyError:
+                return None
+        elif params.start_time is not None and params.end_time is not None:
+            all_data = self.query_all()
+            if all_data is not None:
+                mask = (all_data.index >= params.start_time) & (all_data.index <= params.end_time)
+                out = all_data.loc[mask]
+                if len(out) == 0:
+                    return None
+            else:
+                return None
+        else:
+            raise NotImplementedError
+        return out
+
+
+class Writer(object):
+    '''
+    写入类，负责向文件中写入数据
+    '''
+    def __init__(self, params):
+        self._params = params
+        try:
+            self._reader = Reader(params)
+        except FileNotFoundError:
+            self._create_datafile()
+            self._reader = Reader(params)
+    
+    def _create_datafile(self, col_size=DB_CONFIG['initial_col_size']):
+        '''
+        当数据文件不存在时，调用创建并初始化文件
+        
+        Parameter
+        ---------
+        col_size: int
+            初始的列数，仅对面板数据(DataFormatCategory.PANEL)有效，默认值为配置文件的initial_col_size确定
+        '''
+        params = self._params
+        if str(params.dtype)[0].lower() not in DB_CONFIG['valid_type_header']:
+            raise InvalidInputTypeError('Unsupported data type')
+
+        # 文件初始化
+        with h5py.File(params.absolute_path, 'w-') as store:
+            # 时间数据初始化
+            store.create_dataset('time', shape=(1, ), maxshape=(None, ),
+                                 dtype=DB_CONFIG['date_dtype'])
+            store['time'].attrs['length'] = 0
+            store['time'].attrs['latest_data_time'] = NaS
+            store['time'].attrs['start_time'] = NaS
+            # 属性初始化
+            store.attrs['filled status'] = FilledStatus.EMPTY.name
+            store.attrs['data category'] = params.store_fmt[-1].name
+            if params.store_fmt[-1] == DataFormatCategory.PANEL:   # 面板数据初始化
+                store.create_dataset('symbol', shape=(1, ), maxshape=(None, ),
+                                     dtype=DB_CONFIG['symbol_dtype'])
+                store.create_dataset('data', shape=(1, col_size),
+                                     maxshape=(None, col_size), chunks=(1, col_size),
+                                     dtype=params.dtype)
+                store.attrs['column size'] = col_size
+                store['symbol'].attrs['length'] = 0
+                store['data'].attrs['dtype'] = str(params.dtype)
+                store['data'][...] = np.nan
+            else:
+                store.create_dataset('data', shape=(1, ), maxshape=(None, ),
+                                     dtype=params.dtype)
+                store.attrs['column size'] = 1
+                store['data'].attrs['dtype'] = str(params.dtype)
+                store['data'][...] = np.nan
+        
+    def _insert_series(self, data):
+        '''
+        向数据文件中插入pandas.Series数据
+        
+        Parameter
+        ---------
+        data: pandas.Series
+            Index为时间
+        
+        Return
+        ------
+        result: boolean
+            是否成功插入数据
+        '''
+        if not isinstance(data, pd.Series):
+            raise TypeError("pandas.Series expected, while {} is provided!".format(type(data)))
+        params = self._params
+        reader = self._reader
+        data = Data.init_from_pd(data).as_type(params.dtype)
+        if reader.properties['filled status'] == FilledStatus.FILLED:
+            data.drop_before_date(reader.properties['time']['latest_data_time'])
+            if len(data) == 0:
+                return False
+        result = False
+        data_arr, data_index, _ = data.decompose2dataset()
+        start_index = reader.properties['time']['length']
+        end_index = start_index + len(data)
+        with h5py.File(params.absolute_path, 'r+') as store:
+            data_dset = store['data']
+            time_dset = store['time']
+            data_dset.resize((end_index,))
+            data_dset[start_index: end_index] = data_arr
+            
+            time_dset.resize((end_index, ))
+            time_dset[start_index, end_index] = data_index.to_bytes(DB_CONFIG['date_dtype'],
+                                                                    DB_CONFIG['db_time_format'])
+            result = True
+        self._update_reader()
+        return result
+        
+    
+    def _insert_df(self, data):
+        '''
+        向数据文件中插入pandas.DataFrame文件
+        
+        Parameter
+        ---------
+        data: pandas.DataFrame
+            index为时间轴，columns为股票代码轴
+        
+        Return
+        ------
+        result: boolean
+            是否成功插入数据
+        '''
+        if not isinstance(data, pd.DataFrame):
+            raise TypeError("pandas.DataFrame expected, while {} is provided!".format(type(data)))
+        params = self._params
+        data = Data.init_from_pd(data).astype(params.dtype)
+        reader = self._reader
+        if len(data.symbol_index) > reader.properties['column size']:
+            import warnings
+            warnings.warn('Data column needs to be resized!', RuntimeWarning)
+            
+    def _get_target_size(data_colsize):
+        pass
+    
+    def _reshape_colsize(self, target_colsize):
+        pass
+    
+    def _update_reader(self):
+        pass
+    
+            
+        
+        
 class HDF5Engine(DBEngine):
     '''
     数据库文件管理类
@@ -657,6 +884,7 @@ class HDF5Engine(DBEngine):
             if obj._data_category == DataFormatCategory.PANEL:
                 obj.properties.update({'symbol': {'length': store['symbol'].attrs['length']}})
                 obj.symbols = SymbolIndex.init_from_dataset(store['symbol'])
+            store.close()
         except OSError:
             raise FileNotFoundError
         return obj
