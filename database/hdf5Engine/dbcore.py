@@ -9,7 +9,8 @@ Created on Thu Jan 11 14:53:33 2018
 """
 import abc
 import logging
-from os import remove
+from os import remove, makedirs
+from os.path import exists, dirname
 import pdb
 
 import pandas as pd
@@ -33,7 +34,8 @@ class DataIndex(object, metaclass=abc.ABCMeta):
         init_from_index(pandas.Index: pd_index)将使用pandas.Index对象作为参数传入
         to_bytes()可以将pandas.Index(datetime)转换为二进制字符串数组(numpy.array)
     '''
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def init_from_dataset(cls, dset):
         '''
         使用数据集对象对数据进行初始化
@@ -44,8 +46,9 @@ class DataIndex(object, metaclass=abc.ABCMeta):
             数据集对象
         '''
         pass
-
-    @abc.abstractclassmethod
+    
+    @classmethod
+    @abc.abstractmethod
     def init_from_index(cls, pd_index):
         '''
         使用索引对象对TimeIndex进行初始化
@@ -505,6 +508,9 @@ class Data(object):
 class Reader(object):
     '''
     读取器类，负责从数据文件中读取数据
+    该类提供几个对外的接口:
+    query: 根据给定的参数，从数据文件中请求给定的数据
+    query_all: 根据给定的参数，从数据文件中请求文件中存储的所有数据
     '''
     def __init__(self, params):
         self.properties = None
@@ -603,6 +609,8 @@ class Reader(object):
 class Writer(object):
     '''
     写入类，负责向文件中写入数据
+    该类提供几个对外接口: 
+    insert: 将给定的数据插入到数据文件中
     '''
     def __init__(self, params):
         self._params = params
@@ -611,6 +619,14 @@ class Writer(object):
         except FileNotFoundError:
             self._create_datafile()
             self._reader = Reader(params)
+    
+    def _mk_dirs(self):
+        '''
+        调用系统函数创建文件夹
+        '''
+        directory_path = dirname(self._params.absolute_path)
+        if not exists(directory_path):
+            makedirs(directory_path)
     
     def _create_datafile(self, col_size=DB_CONFIG['initial_col_size']):
         '''
@@ -626,6 +642,7 @@ class Writer(object):
             raise InvalidInputTypeError('Unsupported data type')
 
         # 文件初始化
+        self._mk_dirs()
         with h5py.File(params.absolute_path, 'w-') as store:
             # 时间数据初始化
             store.create_dataset('time', shape=(1, ), maxshape=(None, ),
@@ -653,6 +670,38 @@ class Writer(object):
                 store['data'].attrs['dtype'] = str(params.dtype)
                 store['data'][...] = np.nan
         
+    def insert(self, data):
+        '''
+        将数据插入到数据文件中
+        
+        Parameter
+        ---------
+        data: pandas.DataFrame or pandas.Series
+            需要插入的数据，index为时间轴，columns(对于pandas.DataFrame)为股票代码轴
+        
+        Return
+        ------
+        result: boolean
+        '''
+        if not isinstance(data, (pd.DataFrame, pd.Series)):
+            raise NotImplementedError
+        dtypes = data.dtypes
+        if hasattr(dtypes, '__iter__'):  # pd.DataFrame
+            dtypes = dtypes.astype(str)
+            is_valid_type = any([np.all(dtypes.str.startswith(s))
+                                 for s in DB_CONFIG['valid_type_header']])
+        else:   # pd.Series
+            is_valid_type = any([str(dtypes).startswith(s)
+                                 for s in DB_CONFIG['valid_type_header']])
+        if not is_valid_type:
+            raise UnsupportDataTypeError('Data type is not supported!')
+        # data = data.astype(self._dtype)
+        if isinstance(data, pd.DataFrame):
+            return self._insert_df(data)
+        else:
+            return self._insert_series(data)   
+        
+    
     def _insert_series(self, data):
         '''
         向数据文件中插入pandas.Series数据
@@ -713,447 +762,201 @@ class Writer(object):
         params = self._params
         data = Data.init_from_pd(data).astype(params.dtype)
         reader = self._reader
-        if len(data.symbol_index) > reader.properties['column size']:
+        reader_properties = reader.properties
+        if len(data.symbol_index) > reader_properties['column size']:
             import warnings
             warnings.warn('Data column needs to be resized!', RuntimeWarning)
-            
-    def _get_target_size(data_colsize):
-        pass
-    
-    def _reshape_colsize(self, target_colsize):
-        pass
-    
-    def _update_reader(self):
-        pass
-    
-            
-        
-        
-class HDF5Engine(DBEngine):
-    '''
-    数据库文件管理类
-
-    Parameter
-    ---------
-    path: string
-        数据文件的存储路径
-
-    Notes
-    -----
-    模块说明：
-    主要提供数据文件初始化功能、文件自动扩容功能、查询和插入数据功能，具体功能如下：
-        create_datafile: 类方法，如果数据文件不存在，则根据提供的参数和配置，创建一个新文件
-        init_from_file: 类方法，使用文件对数据库对象进行初始化
-        query_all: 返回数据库中的所有数据
-        query: 返回特定时间的数据
-        insert: 将给定的数据插入到数据库中
-        reshape_colsize: 重置数据库文件中列的大小
-    使用方法：
-        第一次初始化可以使用create_datafile方法，该函数将创建一个数据文件，并进行相关初始化属性的设置，
-        以后可以直接通过init_from_file方法对数据库进行初始化，如果没有找到对应的文件，将引发FileNotFoundError，
-        通常可以先尝试从文件中初始化，然后捕捉对应的异常，在异常中创建文件
-        如果需要插入数据直接调用insert即可，若需要查询数据，使用query即可
-    注意:
-        正常的数据插入将会对应更新对象的相应属性，但是如果出现了reshape_colsize的情况，将会创建新的
-        数据文件，通过新的对象来对数据文件进行维护，因此当前的对象已经不再适用
-    '''
-
-    def __init__(self, path):
-        self._path = path
-        self._data_category = None
-        self._dtype = None
-        self.properties = None   # 字典，记录数据库文件的所有属性
-        self.symbols = None     # 用于记录当前数据的股票代码，TIME_SERIES的该属性为None
-
-    def init_from_object(self, obj):
-        '''
-        从其他数据库对象进行初始化，主要用于解决重新创建文件后无法保持对文件的跟踪的问题
-
-        Parameter
-        ---------
-        obj: DBConnector
-        '''
-        logger.debug("DBConnector.init_from_object")
-        from copy import deepcopy
-        self._path = obj._path
-        self._data_category = obj._data_category
-        self._dtype = obj._dtype
-        self.properties = deepcopy(obj.properties)
-        if obj.symbols is not None:
-            self.symbols = obj.symbols.copy()
-
-    @classmethod
-    def create_datafile(cls, path, data_category, dtype=DB_CONFIG['default_data_type'],
-                        init_col_size=DB_CONFIG['initial_col_size']):
-        '''
-        创建数据文件，并对数据文件进行初始化，返回对应的数据文件对象
-
-        Parameter
-        ---------
-        path: string
-            文件的路径
-        data_category: DataFormatCategory
-            数据类别，目前支持[PANEL, TIME_SERIES]
-        dtype: np.dtype
-            数据类型
-        init_col_size: int or float
-            初始化时列的长度
-
-        Return
-        ------
-        obj: DBConnector
-            包含初始信息的数据库对象
-        '''
-        logger.debug("DBConnector.create_datafile")
-        obj = cls(path)
-        valid_category = [DataFormatCategory.PANEL, DataFormatCategory.TIME_SERIES]
-        if data_category not in valid_category:
-            raise InvalidInputTypeError('Unsupport data category, expect {exp}, you provide {yp}'.
-                                        format(exp=valid_category, yp=data_category))
-        obj._data_category = data_category
-        dtype = np.dtype(dtype)
-        if str(dtype)[0].lower() not in DB_CONFIG['valid_type_header']:
-            raise InvalidInputTypeError('Unsupported data type')
-        obj._dtype = dtype
-
-        # 文件初始化
-        with h5py.File(obj._path, 'w-') as store:
-            # 时间数据初始化
-            store.create_dataset('time', shape=(1, ), maxshape=(None, ),
-                                 dtype=DB_CONFIG['date_dtype'])
-            store['time'].attrs['length'] = 0
-            store['time'].attrs['latest_data_time'] = NaS
-            store['time'].attrs['start_time'] = NaS
-            # 属性初始化
-            store.attrs['filled status'] = FilledStatus.EMPTY.name
-            store.attrs['data category'] = obj._data_category.name
-            obj.properties = {'time': {'length': 0, 'latest_data_time': None, 'start_time': None},
-                            'filled status': FilledStatus.EMPTY,
-                            'data category': obj._data_category}
-            if obj._data_category == DataFormatCategory.PANEL:   # 面板数据初始化
-                store.create_dataset('symbol', shape=(1, ), maxshape=(None, ),
-                                     dtype=DB_CONFIG['symbol_dtype'])
-                store.create_dataset('data', shape=(1, init_col_size),
-                                     maxshape=(None, init_col_size), chunks=(1, init_col_size),
-                                     dtype=obj._dtype)
-                store.attrs['column size'] = init_col_size
-                store['symbol'].attrs['length'] = 0
-                store['data'].attrs['dtype'] = str(obj._dtype)
-                store['data'][...] = np.nan
-                obj.properties.update({'column size': init_col_size,
-                                     'symbol': {'length': 0},
-                                     'data': {'dtype': obj._dtype}})
-            else:
-                store.create_dataset('data', shape=(1, ), maxshape=(None, ),
-                                     dtype=obj._dtype)
-                store.attrs['column size'] = 1
-                store['data'].attrs['dtype'] = str(obj._dtype)
-                store['data'][...] = np.nan
-                obj.properties.update({'column size': 1, 'data': {'dtype': obj._dtype}})
-        return obj
-
-    @classmethod
-    def init_from_file(cls, path):
-        '''
-        从数据文件对数据库对象进行初始化，如果无法找到文件则会触发FileNotFoundError
-
-        Parameter
-        ---------
-        path: string
-            文件所在的路径
-
-        Return
-        ------
-        obj: DBConnector
-            经过数据文件初始化后的数据库对象
-        '''
-        logger.debug("DBConnector.init_from_file")
-        obj = cls(path)
-        try:
-            store = h5py.File(path, 'r')
-            obj._data_category = DataFormatCategory[store.attrs['data category']]
-            obj._dtype = store['data'].attrs['dtype']
-            time_dset = store['time']
-            obj.properties = {'time': {'length': store['time'].attrs['length'],
-                                     'latest_data_time': pd.to_datetime(time_dset.attrs['latest_data_time']),
-                                     'start_time': pd.to_datetime(time_dset.attrs['start_time'])},
-                            'filled status': FilledStatus[store.attrs['filled status']],
-                            'data category': DataFormatCategory[store.attrs['data category']],
-                            'column size': store.attrs['column size'],
-                            'data': {'dtype': np.dtype(obj._dtype)}}
-            if obj._data_category == DataFormatCategory.PANEL:
-                obj.properties.update({'symbol': {'length': store['symbol'].attrs['length']}})
-                obj.symbols = SymbolIndex.init_from_dataset(store['symbol'])
-            store.close()
-        except OSError:
-            raise FileNotFoundError
-        return obj
-
-    def query_all(self):
-        '''
-        返回当前数据集中的所有数据，并根据数据的分类返回恰当的格式，PANEL->pd.DataFrame，
-        TS->pd.Series
-
-        Return
-        ------
-        out: pd.DataFrame or pd.Series
-            数据文件中存储的所有数据，若没有填充任何数据，则返回None
-        '''
-        logger.debug("DBConnector.query_all")
-        try:
-            if self.properties['filled status'] == FilledStatus.EMPTY:
-                return None
-            store = h5py.File(self._path, 'r')
-            # 加载日期数据
-            date_dset = store['time']
-            if self._data_category == DataFormatCategory.PANEL:
-                symbol_dset = store['symbol']
-                data_dset = store['data']
-                data = Data.init_from_datasets(data_dset, date_dset, symbol_dset)
-                out = data.data
-            elif self._data_category == DataFormatCategory.TIME_SERIES:
-                data_dset = store['data']
-                data = Data.init_from_datasets(data_dset, date_dset)
-                out = data.data
-            else:
-                raise NotImplementedError
-        finally:
-            store.close()
-        return out
-
-    def _query_panel(self, start_time, end_time):
-        '''
-        请求时间序列的数据(包含首尾)
-
-        Parameter
-        ---------
-        start_time: datetime like
-            开始时间
-        end_time: datetime like
-            结束时间
-
-        Return
-        ------
-        out: pd.DataFrame or pd.Series
-            若数据分类为PANEL，则返回pd.DataFrame，反之如果为TIME_SERIES则返回pd.Series，若没有符合
-            要求的数据，返回None
-        '''
-        logger.debug("DBConnector._query_panel")
-        start_time = pd.to_datetime(start_time)
-        end_time = pd.to_datetime(end_time)
-        all_data = self.query_all()
-        if all_data is not None:
-            mask = (all_data.index <= end_time) & (all_data.index >= start_time)
-            out = all_data.loc[mask]
-            if len(out) <= 0:
-                return None
-        else:
-            out = None
-        return out
-
-    def _query_cs(self, ptime):
-        '''
-        请求横截面数据，仅支持PANEL类型的数据
-
-        ptime: datetime like
-            横截面数据时间点
-
-        Return
-        ------
-        out: pd.Series
-            横截面数据，若没有则返回None
-        '''
-        logger.debug("DBConnector._query_cs")
-        if self._data_category == DataFormatCategory.TIME_SERIES:
-            raise NotImplementedError
-        all_data = self.query_all()
-        if all_data is None:
-            return None
-        try:
-            out = all_data.loc[ptime]
-        except KeyError:
-            out = None
-        return out
-
-    def query(self, start_time, end_time=None):
-        '''
-        统一数据查询接口
-
-        Parameter
-        ---------
-        start_time: datetime like
-            开始时间
-        end_time: datetime like, default None
-            结束时间，若该参数为None，表示要获取横截面数据
-
-        Return
-        ------
-        out: pd.Series or pd.DataFrame
-            返回数据的类型根据查询结果而定
-        '''
-        logger.debug("DBConnector.query")
-        if end_time is None:
-            out = self._query_cs(start_time)
-        else:
-            out = self._query_panel(start_time, end_time)
-        return out
-
-    def insert(self, data):
-        '''
-        将数据插入到数据库文件中
-
-        Parameter
-        ---------
-        data: pd.DataFrame or pd.Series
-            数据要求为数值格式(dtype以f或者i开头)，其中index为时间，要求为datetime类型，columns为
-            代码列表(如果数据为pd.DataFrame)
-        '''
-        logger.debug("DBConnector.insert")
-        dtypes = data.dtypes
-        if hasattr(dtypes, '__iter__'):  # pd.DataFrame
-            dtypes = dtypes.astype(str)
-            is_valid_type = any([np.all(dtypes.str.startswith(s))
-                                 for s in DB_CONFIG['valid_type_header']])
-        else:   # pd.Series
-            is_valid_type = any([str(dtypes).startswith(s)
-                                 for s in DB_CONFIG['valid_type_header']])
-        if not is_valid_type:
-            raise UnsupportDataTypeError('Data type is not supported!')
-        # data = data.astype(self._dtype)
-        if isinstance(data, pd.DataFrame):
-            self._insert_df(data)
-        elif isinstance(data, pd.Series):
-            self._insert_series(data)
-        else:
-            raise NotImplementedError
-
-    def _insert_df(self, data):
-        '''
-        将pd.DataFrame格式的数据插入到数据库文件中，仅支持PANEL类型
-
-        Parameter
-        ---------
-        data: pd.DataFrame
-        '''
-        logger.debug("DBConnector._insert_df")
-        if self._data_category != DataFormatCategory.PANEL:
-            raise UnsupportDataTypeError('{dt} is not supported by {dc}'.
-                                         format(dt=type(data), dc=DataFormatCategory.PANEL.name))
-        data = Data.init_from_pd(data).as_type(self._dtype)  # 获取数据
-        obj_property = self.properties
-        if len(data.symbol_index) > obj_property['column size']:    # 数据列超过文件列容量
-            import warnings
-            warnings.warn('Data column needs to be resized!', RuntimeWarning)
-            self.reshape_colsize(data)
-            return
-        if obj_property['filled status'] == FilledStatus.FILLED:   # 非第一次更新
-            data.rearrange_symbol(self.symbols.data.tolist())   # 对数据进行重新排列
+            target_colsize = self._get_target_size(len(data.symbol_index))
+            return self._reshape_insertdf(target_colsize, data)
+        if reader_properties['filled status'] == FilledStatus.FILLED: # 非第一次更新
+            data.rearrange_symbol(reader.symbols.data.tolist()) # 对代码轴重新排列
             # 对数据进行切割
-            data.drop_before_date(obj_property['time']['latest_data_time'])
-            if len(data) == 0:  # 没有数据需要插入
-                return
+            data.drop_before_date(reader_properties['time']['latest_data_time'])
+            if len(data) == 0:  # 没有数据需要插入，返回插入数据失败
+                return False
+        result = False
         data_arr, data_index, data_symbol = data.decompose2dataset()
-
-        start_index = obj_property['time']['length']
+        start_index = reader_properties['time']['length']
         end_index = start_index + len(data)
-        with h5py.File(self._path, 'r+') as store:
+        with h5py.File(params.absolute_path, 'r+') as store:
             data_dset = store['data']
             time_dset = store['time']
             symbol_dset = store['symbol']
-            # 重新分配容量，填入数据
-            data_dset.resize((end_index, obj_property['column size']))
+            # 重新分配容量
+            data_dset.resize((end_index, reader_properties['column size']))
+            time_dset.resize((end_index, ))
+            symbol_dset.resize((len(data.symbol_index), ))
+            # 插入数据
+            # 主数据
             data_dset[start_index: end_index, :] = np.nan
             data_dset[start_index: end_index, :len(data.symbol_index)] = data_arr
-
-            time_dset.resize((end_index, ))
+            # 时间数据
             time_dset[start_index: end_index] = data_index.to_bytes(DB_CONFIG['date_dtype'],
                                                                     DB_CONFIG['db_time_format'])
-            symbol_dset.resize((len(data.symbol_index), ))
+            # 股票代码数据
             symbol_dset[...] = data_symbol.to_bytes(DB_CONFIG['symbol_dtype'])
-            # 更新相应的属性数据
-            if obj_property['filled status'] == FilledStatus.EMPTY:
-                store.attrs['filled status'] = FilledStatus.FILLED.name
-                time_dset.attrs['start_time'] = data_index.start_time\
-                    .strftime(DB_CONFIG['db_time_format'])
-                # 更新property
-                obj_property['filled status'] = FilledStatus.FILLED
-                obj_property['time']['start_time'] = data_index.start_time
-
-            time_dset.attrs['latest_data_time'] = data_index.end_time\
-                .strftime(DB_CONFIG['db_time_format'])
-            time_dset.attrs['length'] = end_index
-            symbol_dset.attrs['length'] = len(data.symbol_index)
-
-            obj_property['time']['latest_data_time'] = data_index.end_time
-            obj_property['time']['length'] = end_index
-            obj_property['symbol']['length'] = len(data.symbol_index)
-        self.symbols = SymbolIndex.init_from_index(data.symbol_index)
-
-    def _insert_series(self, data):
+            
+            result = True
+        self._update_reader()
+        return result
+            
+    def _get_target_size(self, data_colsize):
         '''
-        将pd.Series格式的数据插入到数据库文件中，仅支持TIME_SERIES类型
-
+        计算新的数据文件需要扩展的列的数量
+        
         Parameter
         ---------
-        data: pd.Series
+        data_colsize: int
+            新的数据列的长度
+        
+        Return
+        ------
+        target_size: int
+            按照配置文件递增得到的新的列长度
         '''
-        logger.debug("DBConnector._insert_series")
-        if self._data_category != DataFormatCategory.TIME_SERIES:
-            raise InvalidInputTypeError('pd.Series data is expected, you provide {}'.
-                                        format(type(data)))
-        obj_property = self.properties
-        data = Data.init_from_pd(data).as_type(self._dtype)
-        if obj_property['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据
-            data.drop_before_date(obj_property['time']['latest_data_time'])
-            if len(data) == 0:
-                return
-        data_arr, data_index, _ = data.decompose2dataset()
-        start_index = obj_property['time']['length']
-        end_index = start_index + len(data)
-        with h5py.File(self._path, 'r+') as store:
-            data_dset = store['data']
-            time_dset = store['time']
-            data_dset.resize((end_index, ))
-            data_dset[start_index: end_index] = data_arr
-
-            time_dset.resize((end_index, ))
-            time_dset[start_index: end_index] = data_index.to_bytes(DB_CONFIG['date_dtype'],
-                                                                    DB_CONFIG['db_time_format'])
-            # 更新属性数据
-            if obj_property['filled status'] == FilledStatus.EMPTY:
-                store.attrs['filled status'] = FilledStatus.FILLED.name
-                time_dset.attrs['start_time'] = data_index.start_time\
-                    .strftime(DB_CONFIG['db_time_format'])
-                # 更新property
-                obj_property['filled status'] = FilledStatus.FILLED
-                obj_property['time']['start_time'] = data_index.start_time
-
-            time_dset.attrs['latest_data_time'] = data_index.end_time\
-                .strftime(DB_CONFIG['db_time_format'])
-            time_dset.attrs['length'] = end_index
-
-            obj_property['time']['latest_data_time'] = data_index.end_time
-            obj_property['time']['length'] = end_index
-
-    def reshape_colsize(self, data):
+        target_size = self._reader.properties['column size']
+        iter_num = 0    # 为了避免配置文件错误导致死循环的问题
+        while target_size <= data_colsize:
+            iter_num += 1
+            if iter_num > 100:
+                raise ValueError('Infinite loop while calculating target column size, please check the config file!')
+            target_size += DB_CONFIG['col_size_increase_step']
+        return target_size
+    
+    def _reshape_insertdf(self, target_colsize, data):
         '''
-        对原数据文件进行列扩容操作，仅支持PANEL，扩容程度根据配置文件进行调整
-
+        插入的数据列数超过了文件可容纳的列容量，需要对数据文件重新设置，然后将数据插入到文件中，
+        保持数据顺序等属性与原数据库中的数据一致
+        
         Parameter
         ---------
+        target_colsize: int
+            目标列数
         data: Data
-            需要添加的数据
+            需要插入的数据
+        
+        Return
+        ------
+        result: boolean
+            是否成功插入数据
         '''
-        logger.debug("DBConnector.reshape_colsize")
-        if self._data_category == DataFormatCategory.TIME_SERIES:
-            raise NotImplementedError
-        if self.properties['filled status'] == FilledStatus.FILLED:    # 非第一次插入数据是出现容量不足
-            db_data = self.query_all()
+        if self._reader.properties['filled status'] == FilledStatus.FILLED:
+            db_data = self._reader.query_all()
             if db_data is not None:
                 db_data = Data.init_from_pd(db_data)
                 data.update(db_data)
-        remove(self._path)
-        new_size = self.properties['column size'] + DB_CONFIG['col_size_increase_step']
-        obj = HDF5Engine.create_datafile(self._path, self._data_category, self._dtype, new_size)
-        self.init_from_object(obj)
-        self.insert(data.data)
+        remove(self._params.absolute_path)
+        self._create_datafile(target_colsize)
+        self._update_reader()
+        return self._insert_df(data.data)
+    
+    def _update_reader(self):
+        '''
+        对内部Reader对象的状态进行更新
+        '''
+        self._reader = Reader(self._params)
+    
+            
+        
+class HDF5Engine(DBEngine):
+    '''
+    主引擎类
+    提供以下接口:
+    query: 类方法，依据给定的参数，从数据文件中查询相应的数据
+    insert: 类方法，依据给定的参数，向数据文件中插入数据
+    remove_data: 类方法，将数据库中给定的数据删除
+    move_to: 类方法，将给定的数据移动到其他给定的位置
+    '''
+    def __init__(self, params):
+        self._params = params
+        self._reader = None
+        self._writer = None
+    
+    @classmethod
+    def query(cls, params):
+        '''
+        从数据库文件中请求给定的数据
+        
+        Parameter
+        ---------
+        params: database.db.ParamsParser
+            其中，若end_time属性为None时，表示请求横截面数据，仅对面板类型数据有效
+        
+        Return
+        ------
+        out: pandas.DataFrame or pandas.Series
+        '''
+        obj = cls(params)
+        obj._load_reader()
+        return obj._reader.query()
+    
+    @classmethod
+    def insert(cls, data, params):
+        '''
+        将给定的数据插入到数据文件中
+        
+        Parameter
+        ---------
+        data: pandas.DataFrame or pandas.Series
+        params: database.db.ParamsParser
+            相关参数设置
+        
+        Return
+        ------
+        result: boolean
+        '''
+        obj = cls(params)
+        obj._load_writer()
+        return obj._writer.insert(data)
+    
+    @classmethod
+    def remove_data(cls, params):
+        '''
+        将给定的数据删除
+        
+        Parameter
+        ---------
+        params: database.db.ParamsParser
+        
+        Return
+        ------
+        result: boolean
+        '''
+        try:
+            remove(params.absolute_path)
+        except Exception as e:
+            return False
+        return True
+        
+    
+    @classmethod
+    def move_to(cls, src_params, dest_params):
+        '''
+        将给定的数据移动到其他给定的位置
+        
+        Parameter
+        ---------
+        src_params: database.db.ParamsParser
+            原数据文件相关设定参数
+        dest_params: database.db.ParamsParser
+            目标数据文件相关设定参数
+        '''
+        from shutil import move
+        try:
+            move(src_params.absolute_path, dest_params.absolute_path)
+        except Exception:
+            return False
+        return True
+        
+    
+    def _load_reader(self):
+        '''
+        加载Reader对象
+        '''
+        self._reader = Reader(self._params)
+    
+    def _load_writer(self):
+        '''
+        加载Writer对象
+        '''
+        self._writer = Writer(self._params)
