@@ -36,7 +36,8 @@ class StoreFormat(object):
         self._rule = {DataClassification.STRUCTURED: [DataValueCategory.CHAR, DataValueCategory.NUMERIC],
                       DataClassification.UNSTRUCTURED: [None],
                       DataValueCategory.CHAR: [DataFormatCategory.PANEL, DataFormatCategory.TIME_SERIES],
-                      DataValueCategory.NUMERIC: [DataFormatCategory.PANEL, DataFormatCategory.TIME_SERIES]}
+                      DataValueCategory.NUMERIC: [DataFormatCategory.PANEL, DataFormatCategory.TIME_SERIES],
+                      None: [None]}
         self._data = None
         
     @classmethod
