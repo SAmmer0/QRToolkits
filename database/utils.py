@@ -89,22 +89,44 @@ def set_logger(log_config):
 
 class DBEngine(object, metaclass=abc.ABCMeta):
     '''
-    数据引擎虚基类，定义了query和insert两个数据处理接口
+    数据引擎虚基类
+    定义以下接口:
+    query: 类方法，依据给定的参数，从数据文件中查询相应的数据
+    insert: 类方法，依据给定的参数，向数据文件中插入数据
+    remove_data: 类方法，将数据库中给定的数据删除
+    move_to: 类方法，将给定的数据移动到其他给定的位置
     '''
-    @abc.abstractclassmethod
-    def query(self, *args, **kwargs):
+    @classmethod
+    @abc.abstractmethod
+    def query(cls, *args, **kwargs):
         '''
         使用数据引擎从数据文件或者数据库中获取数据
         '''
         pass
     
-    @abc.abstractclassmethod
-    def insert(self, *args, **kwargs):
+    @classmethod
+    @abc.abstractmethod
+    def insert(cls, *args, **kwargs):
         '''
         通过数据引擎将数据插入到数据文件或者数据库中，返回布尔值显示是否插入成功
         '''
         pass
     
+    @classmethod
+    @abc.abstractmethod
+    def remove_data(cls, params):
+        '''
+        将给定的数据删除
+        '''
+        pass
+    
+    @classmethod
+    @abc.abstractmethod
+    def move_to(cls, src_params, dest_params):
+        '''
+        将给定的数据移动到另一给定的位置
+        '''
+        pass
 
     
     
