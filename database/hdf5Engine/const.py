@@ -18,6 +18,9 @@ DB_CONFIG = submodule_initialization(SUBMODULE_NAME, dirname(__file__))
 
 LOGGER_NAME = set_logger(DB_CONFIG['log'])
 
+# 文件后缀
+SUFFIX = '.h5'
+
 # 数据文件填充状态
 
 

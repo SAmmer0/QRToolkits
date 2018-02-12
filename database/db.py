@@ -10,7 +10,7 @@ ParamsParser: 通用参数类
 '''
 import enum
 import os.path as path
-import os.remove as os_remove
+from os import remove as os_remove
 
 from pandas import to_datetime
 from numpy import dtype as np_dtype
@@ -76,7 +76,7 @@ class StoreFormat(object):
         for cate in self._data:
             if last_cate is None:
                 last_cate = cate
-                pass
+                continue
             if cate not in rule[last_cate]:
                 return False
             last_cate = cate
@@ -124,7 +124,7 @@ class ParamsParser(object):
     parse_relpath: 将相对路径解析为绝对路径
     '''
     def __init__(self):
-        self._db_path = None
+        self._main_path = None
         self._start_time = None
         self._end_time = None
         self._engine_map_rule = {(DataClassification.STRUCTURED, DataValueCategory.NUMERIC): HDF5Engine}
@@ -134,7 +134,8 @@ class ParamsParser(object):
                                  (False, True): StoreFormat.from_iterable((DataClassification.STRUCTURED,)),
                                  (True, True): StoreFormat.from_iterable((DataClassification.UNSTRUCTURED,))}
         self._store_fmt = None
-        self._abs_path = None
+        self._rel_path = None
+        self._absolute_path = None
         self._dtype = None
     
     @classmethod
@@ -147,26 +148,29 @@ class ParamsParser(object):
         db_path: string
             数据库的绝对路径
         params: dict
-            字典类型的参数，参数域包含['rel_path'(必须)(string), 'start_time'(datetime), 'end_time'(datetime), 'store_fmt'(StoreFormat), 'dtype'(numpy.dtype)]
+            字典类型的参数，参数域包含['rel_path'(必须)(string), 'start_time'(datetime), 
+            'end_time'(datetime), 'store_fmt'(StoreFormat), 'dtype'(numpy.dtype)]
         
         Return
         ------
         obj: ParamsParser
         '''
         obj = cls()
-        obj._db_path = db_path
+        obj._main_path = db_path
         obj._start_time = params.get('start_time', None)
         if obj._start_time is not None:
             obj._start_time = to_datetime(obj._start_time)
         obj._end_time = params.get('end_time', None)
         if obj._end_time is not None:
             obj._end_time = to_datetime(obj._end_time)
-        obj._abs_path = obj._parse_relpath(params['rel_path'])
+        obj._rel_path = params['rel_path']
         obj._store_fmt = params.get('store_fmt', None)
+        if obj._store_fmt is not None:
+            obj._store_fmt = StoreFormat.from_iterable(obj._store_fmt)
         obj._dtype = params.get('dtype', None)
         if obj._dtype is not None:
             obj._dtype = np_dtype(obj._dtype)
-        if not obj._check_parameters():
+        if not obj.store_fmt.validate():
             raise ValueError("Invalid parameter group!")
         return obj
     
@@ -176,36 +180,18 @@ class ParamsParser(object):
         '''
         return self._engine_map_rule[self._store_fmt.data]
     
-    def _parse_relpath(self, rel_path):
+    def set_absolute_path(self, abs_path):
         '''
-        计算绝对路径
+        设置数据的绝对路径，路径的格式由设置的数据引擎规定，该方法仅由数据引擎调用，与该方法配对
+        的有absolute_path只读属性，用于获取设置的absolute_path，将操作设置为方法是为了强调该方法仅
+        能由数据引擎使用设置成descriptor可能会误导
         
         Parameter
         ---------
-        rel_path: string
-           相对路径的格式为dir.dir.filename
-        
-        Return
-        ------
         abs_path: string
-            绝对路径
+            由数据引擎自行解析的绝对路径
         '''
-        from os import sep
-        from os.path import join
-        rel_path = rel_path.replace('.', sep)
-        return join(self._db_path, rel_path)
-
-    def _check_parameters(self):
-        '''
-        检查参数组合的合法性，包含数据类型组合的合法性以及时间参数与对应的引擎组合的合法性
-        '''
-        if self.store_fmt is None:  # 此时没有提供store_fmt参数，因此不需要检查
-            return True
-        if not self.store_fmt.validate():
-            return False
-        time_tuple = (self.start_time is None, self.end_time is None)
-        dclassification = self._validation_rule[time_tuple]
-        return dclassification[0] == self.store_fmt[0]
+        self._absolute_path = abs_path
         
 
     @property
@@ -217,8 +203,16 @@ class ParamsParser(object):
         return self._end_time
     
     @property
+    def main_path(self):
+        return self._main_path
+    
+    @property
+    def rel_path(self):
+        return self._rel_path
+    
+    @property
     def absolute_path(self):
-        return self._abs_path
+        return self._absolute_path
     
     @property
     def store_fmt(self):
@@ -244,7 +238,7 @@ class Database(object):
         数据的存储路径
     '''
     def __init__(self, db_path):
-        self._db_path = db_path
+        self._main_path = db_path
     
     def query(self, rel_path, store_fmt, start_time=None, end_time=None):
         '''
@@ -257,7 +251,8 @@ class Database(object):
         store_fmt: StoreFormat or iterable
             数据存储格式分类
         start_time: datetime like
-            数据开始时间(可选)
+            数据开始时间(可选)，若请求的是面板数据的某个时间点的横截面数据，该参数不能为None，
+            而end_time参数需要为None
         end_time: datetime like
             数据结束时间(可选)
         
@@ -269,6 +264,15 @@ class Database(object):
                                                         'store_fmt': store_fmt,
                                                         'start_time': start_time, 
                                                         'end_time': end_time})
+        # 时间参数校验规则，键为(start_time is None, end_time is None)，值为对应的数据结构分类
+        validation_rule = {(True, True): DataClassification.UNSTRUCTURED,
+                           (False, False): DataClassification.STRUCTURED,
+                           (False, True): DataClassification.STURCTURED,
+                           (True, False): None}
+        time_flag = (start_time is None, end_time is None)
+        vclassification = validation_rule[time_flag]
+        if vclassification is None or vclassification != params.store_fmt[0]:
+            raise ValueError('Invalid parameter group in database query!')
         engine = params.get_engine()
         data = engine.query(params)
         return data

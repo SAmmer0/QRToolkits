@@ -128,5 +128,10 @@ class DBEngine(object, metaclass=abc.ABCMeta):
         '''
         pass
 
-    
+    @abc.abstractmethod
+    def _parse_path(self):
+        '''
+        解析数据的绝对路径
+        '''
+        pass
     

@@ -9,17 +9,17 @@ Created on Thu Jan 11 14:53:33 2018
 """
 import abc
 import logging
-from os import remove, makedirs
-from os.path import exists, dirname
+from os import remove, makedirs, sep
+from os.path import exists, dirname, join
 import pdb
 
 import pandas as pd
 import h5py
 import numpy as np
 
-from database.hdf5Engine.const import LOGGER_NAME, DB_CONFIG, DataFormatCategory, FilledStatus, NaS
+from database.hdf5Engine.const import LOGGER_NAME, DB_CONFIG, DataFormatCategory, FilledStatus, NaS, SUFFIX
 from database.hdf5Engine.exceptions import InvalidInputTypeError, UnsupportDataTypeError
-from database.db import DBEngine
+from database.utils import DBEngine
 
 # 获取当前日志句柄
 logger = logging.getLogger(LOGGER_NAME)
@@ -454,7 +454,7 @@ class Data(object):
         logger.debug("Data.sort_index")
         self._data = self._data.sort_index(ascending=ascending)
 
-    def as_type(self, dtype):
+    def trans2type(self, dtype):
         '''
         将数据类型转换为给定的类型
 
@@ -522,17 +522,22 @@ class Reader(object):
         '''
         从数据文件中加载元数据
         '''
+        def load_time(t):
+            '''
+            处理加载初始化数据文件时间参数的问题
+            '''
+            return t if t == NaS else pd.to_datetime(t)
         try:
-            store = h5py.File(params.absolute_path, 'r')
+            store = h5py.File(self._params.absolute_path, 'r')
             time_dset = store['time']
             self.properties = {'time': {'length': store['time'].attrs['length'],
-                                     'latest_data_time': pd.to_datetime(time_dset.attrs['latest_data_time']),
-                                     'start_time': pd.to_datetime(time_dset.attrs['start_time'])},
+                                     'latest_data_time': load_time(time_dset.attrs['latest_data_time']),
+                                     'start_time': load_time(time_dset.attrs['start_time'])},
                             'filled status': FilledStatus[store.attrs['filled status']],
                             'data category': DataFormatCategory[store.attrs['data category']],
                             'column size': store.attrs['column size'],
-                            'data': {'dtype': np.dtype(self._dtype)}}
-            if self._params.store_fmt[-1] == DataFormatCategory.PANLE: # 这里假设最后一级存储格式为DataFromatCategory类型
+                            'data': {'dtype': np.dtype(store['data'].attrs['dtype'])}}
+            if self._params.store_fmt[-1] == DataFormatCategory.PANEL: # 这里假设最后一级存储格式为DataFromatCategory类型
                 self.properties.update({'symbol': {'length': store['symbol'].attrs['length']}})
                 self.symbols = SymbolIndex.init_from_dataset(store['symbol'])                
         except OSError:
@@ -586,7 +591,7 @@ class Reader(object):
         '''
         params = self._params
         if (self.properties['data category'] == DataFormatCategory.PANEL and 
-            params.start_time is None and params.end_time is not None):  # 请求横截面数据
+            params.start_time is not None and params.end_time is None):  # 请求横截面数据
             all_data = self.query_all()
             try:
                 out = all_data.loc[params.start_time]
@@ -720,7 +725,8 @@ class Writer(object):
             raise TypeError("pandas.Series expected, while {} is provided!".format(type(data)))
         params = self._params
         reader = self._reader
-        data = Data.init_from_pd(data).as_type(params.dtype)
+        data = Data.init_from_pd(data)
+        data.trans2type(params.dtype)
         if reader.properties['filled status'] == FilledStatus.FILLED:
             data.drop_before_date(reader.properties['time']['latest_data_time'])
             if len(data) == 0:
@@ -736,8 +742,14 @@ class Writer(object):
             data_dset[start_index: end_index] = data_arr
             
             time_dset.resize((end_index, ))
-            time_dset[start_index, end_index] = data_index.to_bytes(DB_CONFIG['date_dtype'],
+            time_dset[start_index: end_index] = data_index.to_bytes(DB_CONFIG['date_dtype'],
                                                                     DB_CONFIG['db_time_format'])
+            # 更新元数据
+            new_properties = {'time': {'length': end_index,
+                                       'latest_data_time': data.end_time, 
+                                       'start_time': data.start_time if reader.properties['time']['start_time'] == NaS else reader.properties['time']['start_time']},
+                              'filled status': FilledStatus.FILLED}
+            self._update_file_metadata(store, new_properties)
             result = True
         self._update_reader()
         return result
@@ -760,7 +772,8 @@ class Writer(object):
         if not isinstance(data, pd.DataFrame):
             raise TypeError("pandas.DataFrame expected, while {} is provided!".format(type(data)))
         params = self._params
-        data = Data.init_from_pd(data).astype(params.dtype)
+        data = Data.init_from_pd(data)
+        data.trans2type(params.dtype)
         reader = self._reader
         reader_properties = reader.properties
         if len(data.symbol_index) > reader_properties['column size']:
@@ -795,7 +808,13 @@ class Writer(object):
                                                                     DB_CONFIG['db_time_format'])
             # 股票代码数据
             symbol_dset[...] = data_symbol.to_bytes(DB_CONFIG['symbol_dtype'])
-            
+            # 更新元数据
+            new_properties = {'time': {'length': end_index,
+                                       'latest_data_time': data.end_time, 
+                                       'start_time': data.start_time if reader_properties['time']['start_time'] == NaS else reader_properties['time']['start_time']},
+                              'filled status': FilledStatus.FILLED,
+                              'symbol': {'length': len(data.symbol_index)}}
+            self._update_file_metadata(store, new_properties)
             result = True
         self._update_reader()
         return result
@@ -856,6 +875,30 @@ class Writer(object):
         '''
         self._reader = Reader(self._params)
     
+    def _update_file_metadata(self, store, new_properties):
+        '''
+        将元数据更新到文件中
+        
+        Parameter
+        ---------
+        store: h5py.File
+            需要被写入元数据的文件
+        new_properties: dict
+            需要被更新的属性，基本结构如下
+            {'time': {'length': time lenght,
+                    'latest_data_time': data end time, 
+                    'start_time': data start time},
+           'filled status': new filled status,
+           'symbol': {'length': symbol length}(optional)}
+        '''
+        store['time'].attrs['length'] = new_properties['time']['length']
+        store['time'].attrs['latest_data_time'] = new_properties['time']['latest_data_time'].strftime(DB_CONFIG['db_time_format'])
+        store['time'].attrs['start_time'] = new_properties['time']['start_time'].strftime(DB_CONFIG['db_time_format'])
+        store.attrs['filled status'] = new_properties['filled status'].name
+        symbol_property = new_properties.get('symbol', None)
+        if symbol_property is not None:
+            store['symbol'].attrs['length'] = symbol_property['length']
+    
             
         
 class HDF5Engine(DBEngine):
@@ -869,6 +912,7 @@ class HDF5Engine(DBEngine):
     '''
     def __init__(self, params):
         self._params = params
+        self._parse_path()
         self._reader = None
         self._writer = None
     
@@ -960,3 +1004,11 @@ class HDF5Engine(DBEngine):
         加载Writer对象
         '''
         self._writer = Writer(self._params)
+    
+    def _parse_path(self):
+        '''
+        解析数据绝对路径
+        '''
+        params = self._params
+        rel_path = params.rel_path.replace('.', sep) + SUFFIX
+        params.set_absolute_path(join(params.main_path, rel_path))

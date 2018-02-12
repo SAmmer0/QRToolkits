@@ -6,42 +6,55 @@
 # @Version : $Id$
 from random import shuffle, seed
 from time import sleep
+from os import remove
+from os.path import join
 
 import numpy as np
 
+from numpy import dtype as np_dtype
+
+from database.hdf5Engine.dbcore import HDF5Engine
+from database.const import DataFormatCategory, DataValueCategory, DataClassification
+from database.db import ParamsParser
 from fmanager import query
-from database.hdf5db.dbcore import *
 
 start_time = '2017-01-01'
 first_end_time = '2017-06-01'
 second_end_time = '2017-12-30'
 test_factor = 'CLOSE'
-db_path = r'C:\Users\c\Desktop\test\test_reshape.h5'
+db_path = r'C:\Users\c\Desktop\test'
+rel_path = 'test_reshape'
 initial_size = 1000
 
 seed(1)
 
+enable_second = False
 
 def first_insert():
     data = query(test_factor, (start_time, first_end_time)).iloc[:, :initial_size]
     columns = list(data.columns)
     shuffle(columns)
     data = data.loc[:, columns]
-    db = HDF5Engine.create_datafile(db_path, DataFormatCategory.PANEL)
-    db.insert(data)
+    HDF5Engine.insert(data, ParamsParser.from_dict(db_path, {'rel_path': rel_path, 
+                                                    'store_fmt': (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL),
+                                                    'dtype': np_dtype('float64')}))
 
 
 def second_insert():
     data = query(test_factor, (start_time, second_end_time))
-    db = HDF5Engine.init_from_file(db_path)
-    db.insert(data)
+    HDF5Engine.insert(data, ParamsParser.from_dict(db_path, {'rel_path': rel_path, 
+                                                    'store_fmt': (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL),
+                                                    'dtype': np_dtype('float64')}))
 
 
 def query_compare():
     old_db_data = query(test_factor, (start_time, second_end_time))
     threshold_loc = old_db_data.index.get_loc(first_end_time) + 1
-    db = HDF5Engine.init_from_file(db_path)
-    new_db_data = db.query(start_time, second_end_time)
+    
+    new_db_data = HDF5Engine.query(ParamsParser.from_dict(db_path, {"rel_path": 'test', 
+                                                  'start_time': start_time,
+                                                  'end_time': second_end_time,
+                                                  "store_fmt": (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL)}))
     old_db_data = old_db_data.fillna(0)
     new_db_data = new_db_data.fillna(0)
     columns1 = new_db_data.columns[:initial_size]
@@ -56,9 +69,11 @@ def query_compare():
 
 if __name__ == '__main__':
     import os
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    file_path = join(db_path, rel_path + '.h5')
+    if os.path.exists(file_path):
+        os.remove(file_path)
     first_insert()
-    sleep(3)
-    second_insert()
-    query_compare()
+    if enable_second:
+        sleep(1)
+        second_insert()
+        query_compare()
