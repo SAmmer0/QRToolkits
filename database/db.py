@@ -260,7 +260,7 @@ class Database(object):
         ------
         out: pandas.Series, pandas.DataFrame or object
         '''
-        params = ParamsParser.from_dict(self._db_path, {'rel_path': rel_path, 
+        params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path, 
                                                         'store_fmt': store_fmt,
                                                         'start_time': start_time, 
                                                         'end_time': end_time})
@@ -296,7 +296,7 @@ class Database(object):
         issuccess: boolean
             是否成功插入数据，True表示成功
         '''
-        params = ParamsParser.from_dict(self._db_path, {'rel_path': rel_path,
+        params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
                                                         'store_fmt': store_fmt,
                                                         'dtype': dtype})
         engine = params.get_engine()
@@ -318,7 +318,7 @@ class Database(object):
         ------
         issuccess: boolean
         '''
-        params = ParamsParser.from_dict(self._db_path, {'rel_path': rel_path,
+        params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
                                                         'store_fmt': store_fmt})
         engine = params.get_engine()
         issuccess = engine.remove_data(params)
@@ -340,9 +340,9 @@ class Database(object):
         ------
         issuccess: boolean
         '''
-        src_params = ParamsParser.from_dict(self._db_path, {'rel_path': source_rel_path, 
+        src_params = ParamsParser.from_dict(self._main_path, {'rel_path': source_rel_path, 
                                                             'store_fmt': store_fmt})
-        dest_params = ParamsParser.from_dict(self._db_path, {'rel_path': dest_rel_path,
+        dest_params = ParamsParser.from_dict(self._main_path, {'rel_path': dest_rel_path,
                                                              'store_fmt': store_fmt})
         engine = src_params.get_engine()
         issuccess = engine.move_to(src_params, dest_params)

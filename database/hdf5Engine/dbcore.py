@@ -967,7 +967,8 @@ class HDF5Engine(DBEngine):
         result: boolean
         '''
         try:
-            remove(params.absolute_path)
+            obj = cls(params)
+            remove(obj._params.absolute_path)
         except Exception as e:
             return False
         return True
@@ -987,7 +988,9 @@ class HDF5Engine(DBEngine):
         '''
         from shutil import move
         try:
-            move(src_params.absolute_path, dest_params.absolute_path)
+            src_obj = cls(src_params)
+            dest_obj = cls(dest_params)
+            move(src_obj._params.absolute_path, dest_obj._params.absolute_path)
         except Exception:
             return False
         return True

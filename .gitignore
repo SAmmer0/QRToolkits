@@ -102,3 +102,5 @@ ENV/
 sysconfiglee.py
 CONST_DATAS/
 test_sources/
+*.wpr
+*.wpu
