@@ -20,6 +20,12 @@ if CONFIG_PATH.startswith(REL_PATH_HEADER):
 # 设置模块名称，主要用于日志记录中
 MODULE_NAME = 'qrt_database'
 
+# 数据文件填充状态
+
+class FilledStatus(enum.Enum):
+    FILLED = enum.auto()
+    EMPTY = enum.auto()
+
 # 数据形式分类: 时间序列数据、面板数据
 
 

@@ -10,7 +10,7 @@ from os.path import dirname
 import enum
 
 from database.utils import submodule_initialization, set_logger
-from database.const import DataFormatCategory, NaS
+from database.const import DataFormatCategory, NaS, FilledStatus
 
 SUBMODULE_NAME = 'hdf5db'
 # 设置日志选项
@@ -20,10 +20,3 @@ LOGGER_NAME = set_logger(DB_CONFIG['log'])
 
 # 文件后缀
 SUFFIX = '.h5'
-
-# 数据文件填充状态
-
-
-class FilledStatus(enum.Enum):
-    FILLED = enum.auto()
-    EMPTY = enum.auto()
