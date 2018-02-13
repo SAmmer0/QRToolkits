@@ -36,6 +36,29 @@
         // format of time data in database
         "db_time_format": "%Y%m%d"
     },
+    "jsondb":{
+        // format of time data in database
+        "db_time_format": "%Y%m%d",
+        // to make read and write more efficient, the data are stored in different files dependent
+        // on its time, the supported split frequencies are ["YEAR", "MONTH", "QUARTER"], for example,
+        // if it's set "YEAR", the file named "2017.json" will contain data from 2017-01-01 to 2017-12-31
+        "data_spilt_frequency": "YEAR",
+        "log":{
+            // whether the database use an independent log file
+            "enable_log": true,
+            // log is save to file, otherwise log will be printed
+            "log_to_file": true,
+            // log path where the log file is saved, starting with "./" means relative path
+            // Warning: in configuration file separator is "/"
+            "log_path": "./jsondb_log.log",
+            // log level
+            "log_level": "DEBUG",
+            // log format
+            "format": "%(asctime)s %(levelname)s %(filename)s-%(lineno)s: %(message)s",
+            // date format
+            "date_format": "%Y-%m-%d %H:%M:%S"
+        }
+    },
     "log": {
         // whether enable the database module log
         "enable_log": true,
