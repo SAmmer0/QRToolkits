@@ -46,7 +46,7 @@ class DataIndex(object, metaclass=abc.ABCMeta):
             数据集对象
         '''
         pass
-    
+
     @classmethod
     @abc.abstractmethod
     def init_from_index(cls, pd_index):
@@ -319,7 +319,10 @@ class Data(object):
         else:
             raise UnsupportDataTypeError("Only pd.DataFrame or pd.Series is allowed, you provide {}".
                                          format(type(pd_data)))
-        obj._data = pd_data
+        # 还是需要把时间排序加上去，因为时间序列类数据中时间性质很重要，而且已经很明确了该数据库
+        # 存储的是带有时间标签的数据，因此存储前需要保证时间顺序的正确性，读取则不需要，因为读取时的
+        # 顺序由写入的顺序决定
+        obj._data = pd_data.sort_index(ascending=True)
         return obj
 
     @classmethod
@@ -341,7 +344,6 @@ class Data(object):
         obj: Data
             通过数据集数据初始化后的对象
         '''
-        logger.debug("Data.init_from_datasets")
         obj = cls()
         date_index = TimeIndex.init_from_dataset(date_dset)
         if symbol_dset is not None:
@@ -391,11 +393,11 @@ class Data(object):
         symbol_order: iterable
             给定的代码排列顺序
         '''
-        logger.debug("Data.rearrange_symbol")
         if self._data_category == DataFormatCategory.TIME_SERIES:
             raise NotImplementedError
-
-        diff = sorted(self._data.columns.difference(symbol_order))
+        if self._data.columns.tolist() == list(symbol_order):
+            return
+        diff = sorted(self._data.columns.difference(symbol_order), reverse=False)
         new_order = list(symbol_order) + diff
         self._data = self._data.reindex(columns=new_order)
 
@@ -406,8 +408,9 @@ class Data(object):
         date: datetime like
             日期剔除的阈值
         '''
-        logger.debug("Data.drop_before_date")
         date = pd.to_datetime(date)
+        if date < self.start_time:  # 无重叠时间
+            return
         data = self._data
         self._data = data.loc[data.index > date]
 
@@ -425,7 +428,6 @@ class Data(object):
         other: Data
             更新数据的来源，要求提供的参数与当前对象的数据分类相同
         '''
-        logger.debug("Data.update")
         if self.data_category != other.data_category:
             raise ValueError('Incompatible data category, {dc} required, but {pdc} is provided'.
                              format(dc=self.data_category, pdc=other.data_category))
@@ -451,7 +453,6 @@ class Data(object):
         ascending: boolean, default True
             是否升序排列，默认为True
         '''
-        logger.debug("Data.sort_index")
         self._data = self._data.sort_index(ascending=ascending)
 
     def trans2type(self, dtype):
@@ -490,7 +491,7 @@ class Data(object):
     @property
     def symbol_index(self):
         if self.data_category == DataFormatCategory.PANEL:
-            return self._data.columns
+            return self._data.columns.tolist()
         else:
             return None
 
@@ -517,7 +518,7 @@ class Reader(object):
         self._params = params
         self.symbols = None
         self._load_property()
-        
+
     def _load_property(self):
         '''
         从数据文件中加载元数据
@@ -539,13 +540,13 @@ class Reader(object):
                             'data': {'dtype': np.dtype(store['data'].attrs['dtype'])}}
             if self._params.store_fmt[-1] == DataFormatCategory.PANEL: # 这里假设最后一级存储格式为DataFromatCategory类型
                 self.properties.update({'symbol': {'length': store['symbol'].attrs['length']}})
-                self.symbols = SymbolIndex.init_from_dataset(store['symbol'])                
+                self.symbols = SymbolIndex.init_from_dataset(store['symbol'])
         except OSError:
             raise FileNotFoundError
         except Exception as e:
             store.close()
             raise e
-    
+
     def query_all(self):
         '''
         根据传入给本对象的相关参数，从数据文件中查询所有数据，并根据数据的分类返回恰当的格式，PANEL->pd.DataFrame，
@@ -578,7 +579,7 @@ class Reader(object):
         finally:
             store.close()
         return out
-    
+
     def query(self):
         '''
         根据传入给本对象的相关参数，从数据文件中查询请求的数据，并根据数据的分类返回恰当的格式，PANEL->pd.DataFrame，
@@ -590,7 +591,7 @@ class Reader(object):
             数据文件中存储的所有数据，若没有填充任何数据，则返回None
         '''
         params = self._params
-        if (self.properties['data category'] == DataFormatCategory.PANEL and 
+        if (self.properties['data category'] == DataFormatCategory.PANEL and
             params.start_time is not None and params.end_time is None):  # 请求横截面数据
             all_data = self.query_all()
             try:
@@ -614,7 +615,7 @@ class Reader(object):
 class Writer(object):
     '''
     写入类，负责向文件中写入数据
-    该类提供几个对外接口: 
+    该类提供几个对外接口:
     insert: 将给定的数据插入到数据文件中
     '''
     def __init__(self, params):
@@ -624,7 +625,7 @@ class Writer(object):
         except FileNotFoundError:
             self._create_datafile()
             self._reader = Reader(params)
-    
+
     def _mk_dirs(self):
         '''
         调用系统函数创建文件夹
@@ -632,11 +633,11 @@ class Writer(object):
         directory_path = dirname(self._params.absolute_path)
         if not exists(directory_path):
             makedirs(directory_path)
-    
+
     def _create_datafile(self, col_size=DB_CONFIG['initial_col_size']):
         '''
         当数据文件不存在时，调用创建并初始化文件
-        
+
         Parameter
         ---------
         col_size: int
@@ -674,16 +675,16 @@ class Writer(object):
                 store.attrs['column size'] = 1
                 store['data'].attrs['dtype'] = str(params.dtype)
                 store['data'][...] = np.nan
-        
+
     def insert(self, data):
         '''
         将数据插入到数据文件中
-        
+
         Parameter
         ---------
         data: pandas.DataFrame or pandas.Series
             需要插入的数据，index为时间轴，columns(对于pandas.DataFrame)为股票代码轴
-        
+
         Return
         ------
         result: boolean
@@ -704,18 +705,18 @@ class Writer(object):
         if isinstance(data, pd.DataFrame):
             return self._insert_df(data)
         else:
-            return self._insert_series(data)   
-        
-    
+            return self._insert_series(data)
+
+
     def _insert_series(self, data):
         '''
         向数据文件中插入pandas.Series数据
-        
+
         Parameter
         ---------
         data: pandas.Series
             Index为时间
-        
+
         Return
         ------
         result: boolean
@@ -740,30 +741,30 @@ class Writer(object):
             time_dset = store['time']
             data_dset.resize((end_index,))
             data_dset[start_index: end_index] = data_arr
-            
+
             time_dset.resize((end_index, ))
             time_dset[start_index: end_index] = data_index.to_bytes(DB_CONFIG['date_dtype'],
                                                                     DB_CONFIG['db_time_format'])
             # 更新元数据
             new_properties = {'time': {'length': end_index,
-                                       'latest_data_time': data.end_time, 
+                                       'latest_data_time': data.end_time,
                                        'start_time': data.start_time if reader.properties['time']['start_time'] == NaS else reader.properties['time']['start_time']},
                               'filled status': FilledStatus.FILLED}
             self._update_file_metadata(store, new_properties)
             result = True
         self._update_reader()
         return result
-        
-    
+
+
     def _insert_df(self, data):
         '''
         向数据文件中插入pandas.DataFrame文件
-        
+
         Parameter
         ---------
         data: pandas.DataFrame
             index为时间轴，columns为股票代码轴
-        
+
         Return
         ------
         result: boolean
@@ -810,7 +811,7 @@ class Writer(object):
             symbol_dset[...] = data_symbol.to_bytes(DB_CONFIG['symbol_dtype'])
             # 更新元数据
             new_properties = {'time': {'length': end_index,
-                                       'latest_data_time': data.end_time, 
+                                       'latest_data_time': data.end_time,
                                        'start_time': data.start_time if reader_properties['time']['start_time'] == NaS else reader_properties['time']['start_time']},
                               'filled status': FilledStatus.FILLED,
                               'symbol': {'length': len(data.symbol_index)}}
@@ -818,16 +819,16 @@ class Writer(object):
             result = True
         self._update_reader()
         return result
-            
+
     def _get_target_size(self, data_colsize):
         '''
         计算新的数据文件需要扩展的列的数量
-        
+
         Parameter
         ---------
         data_colsize: int
             新的数据列的长度
-        
+
         Return
         ------
         target_size: int
@@ -841,19 +842,19 @@ class Writer(object):
                 raise ValueError('Infinite loop while calculating target column size, please check the config file!')
             target_size += DB_CONFIG['col_size_increase_step']
         return target_size
-    
+
     def _reshape_insertdf(self, target_colsize, data):
         '''
         插入的数据列数超过了文件可容纳的列容量，需要对数据文件重新设置，然后将数据插入到文件中，
         保持数据顺序等属性与原数据库中的数据一致
-        
+
         Parameter
         ---------
         target_colsize: int
             目标列数
         data: Data
             需要插入的数据
-        
+
         Return
         ------
         result: boolean
@@ -868,17 +869,17 @@ class Writer(object):
         self._create_datafile(target_colsize)
         self._update_reader()
         return self._insert_df(data.data)
-    
+
     def _update_reader(self):
         '''
         对内部Reader对象的状态进行更新
         '''
         self._reader = Reader(self._params)
-    
+
     def _update_file_metadata(self, store, new_properties):
         '''
         将元数据更新到文件中
-        
+
         Parameter
         ---------
         store: h5py.File
@@ -886,7 +887,7 @@ class Writer(object):
         new_properties: dict
             需要被更新的属性，基本结构如下
             {'time': {'length': time lenght,
-                    'latest_data_time': data end time, 
+                    'latest_data_time': data end time,
                     'start_time': data start time},
            'filled status': new filled status,
            'symbol': {'length': symbol length}(optional)}
@@ -898,9 +899,9 @@ class Writer(object):
         symbol_property = new_properties.get('symbol', None)
         if symbol_property is not None:
             store['symbol'].attrs['length'] = symbol_property['length']
-    
-            
-        
+
+
+
 class HDF5Engine(DBEngine):
     '''
     主引擎类
@@ -915,17 +916,17 @@ class HDF5Engine(DBEngine):
         self._parse_path()
         self._reader = None
         self._writer = None
-    
+
     @classmethod
     def query(cls, params):
         '''
         从数据库文件中请求给定的数据
-        
+
         Parameter
         ---------
         params: database.db.ParamsParser
             其中，若end_time属性为None时，表示请求横截面数据，仅对面板类型数据有效
-        
+
         Return
         ------
         out: pandas.DataFrame or pandas.Series
@@ -933,18 +934,18 @@ class HDF5Engine(DBEngine):
         obj = cls(params)
         obj._load_reader()
         return obj._reader.query()
-    
+
     @classmethod
     def insert(cls, data, params):
         '''
         将给定的数据插入到数据文件中
-        
+
         Parameter
         ---------
         data: pandas.DataFrame or pandas.Series
         params: database.db.ParamsParser
             相关参数设置
-        
+
         Return
         ------
         result: boolean
@@ -952,16 +953,16 @@ class HDF5Engine(DBEngine):
         obj = cls(params)
         obj._load_writer()
         return obj._writer.insert(data)
-    
+
     @classmethod
     def remove_data(cls, params):
         '''
         将给定的数据删除
-        
+
         Parameter
         ---------
         params: database.db.ParamsParser
-        
+
         Return
         ------
         result: boolean
@@ -972,13 +973,13 @@ class HDF5Engine(DBEngine):
         except Exception as e:
             return False
         return True
-        
-    
+
+
     @classmethod
     def move_to(cls, src_params, dest_params):
         '''
         将给定的数据移动到其他给定的位置
-        
+
         Parameter
         ---------
         src_params: database.db.ParamsParser
@@ -994,20 +995,20 @@ class HDF5Engine(DBEngine):
         except Exception:
             return False
         return True
-        
-    
+
+
     def _load_reader(self):
         '''
         加载Reader对象
         '''
         self._reader = Reader(self._params)
-    
+
     def _load_writer(self):
         '''
         加载Writer对象
         '''
         self._writer = Writer(self._params)
-    
+
     def _parse_path(self):
         '''
         解析数据绝对路径

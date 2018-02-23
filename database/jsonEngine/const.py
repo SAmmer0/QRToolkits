@@ -14,3 +14,4 @@ LOGGER_NAME = set_logger(DB_CONFIG['log'])
 
 # 文件后缀
 SUFFIX = '.json'
+
