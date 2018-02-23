@@ -15,3 +15,6 @@ LOGGER_NAME = set_logger(DB_CONFIG['log'])
 # 文件后缀
 SUFFIX = '.json'
 
+# 元数据文件名称
+METADATA_FILENAME = 'metadata.json'
+

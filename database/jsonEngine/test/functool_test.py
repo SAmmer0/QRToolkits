@@ -1,6 +1,6 @@
 # -*- encoding: utf-8
 
-from database.jsonEngine.dbcore import date2filename, date2filenamelist, trans_metadata, DB_CONFIG
+from database.jsonEngine.dbcore import date2filename, date2filenamelist, DB_CONFIG
 
 # 手动变换配置测试不同的效果
 DB_CONFIG['data_spilt_frequency'] = 'YEAR'

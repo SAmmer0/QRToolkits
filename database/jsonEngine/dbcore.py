@@ -6,35 +6,26 @@ import logging
 import json
 from copy import deepcopy
 from functools import reduce
+from os import sep, makedirs
+from os.path import join, exists
 
 import pandas as pd
 
 from database.utils import DBEngine
-from database.jsonEngine.const import LOGGER_NAME, DB_CONFIG, DataFormatCategory, FilledStatus, NaS, SUFFIX
+from database.jsonEngine.const import (LOGGER_NAME,
+                                       DB_CONFIG,
+                                       DataFormatCategory,
+                                       FilledStatus,
+                                       NaS,
+                                       SUFFIX,
+                                       METADATA_FILENAME)
 
 # 获取当前日志处理的句柄
 logger = logging.getLogger(LOGGER_NAME)
 
 # -------------------------------------------------------------------------------------------------------------
 # 函数
-def trans_metadata(json_metadata):
-    '''
-    将从JSON文件中读取出来的文件夹中的元数据文件进行转换
 
-    Parameter
-    ---------
-    json_metadata: dict
-
-    Return
-    ------
-    meta_data: dict
-    '''
-    meta_data = deepcopy(json_metadata)
-    meta_data['start time'] = pd.to_datetime(meta_data['start time'])
-    meta_data['end time'] = pd.to_datetime(meta_data['end time'])
-    meta_data['data category'] = DataFormatCategory[meta_data['data category']]
-    meta_data['filled status'] = FilledStatus[meta_data['filled status']]
-    return meta_data
 
 def date2filename(date):
     '''
@@ -169,7 +160,7 @@ class DataWrapper(object):
         return obj
 
     @classmethod
-    def init_from_files(cls, data_file_objs, meta_file_obj):
+    def init_from_files(cls, data_file_objs, meta_data):
         '''
         使用文件对象对实例进行初始化
 
@@ -177,15 +168,14 @@ class DataWrapper(object):
         ---------
         data_file_objs: iterable
             数据文件对象容器，元素为file object
-        meta_file_obj: file object
-            元数据文件对象
+        meta_data: dic
+            元数据字典
 
         Return
         ------
         obj: DataWrapper
         '''
         obj = cls()
-        meta_data = trans_metadata(json.load(meta_file_obj))
 
         def load_data(file_obj, symbols):
             # 从数据文件中加载数据
@@ -297,7 +287,6 @@ class DataWrapper(object):
         Return
         ------
         out: dict
-            格式为{file_name(without suffix): dict}，元素中dict的格式与数据文件的格式相同，即
             若为面板数据则为{date: ['sample1', 'sample2', ...]}，若为时间序列数据则为{date: 'sample1', ...}
             返回的数据都为内置字典类型数据，键没有强制的顺序，在存储过程中需要注意
         Notes
@@ -337,4 +326,153 @@ class DataWrapper(object):
 
     def __len__(self):
         return len(self._data)
+
+
+
+class JSONEngine(DBEngine):
+    '''
+
+    主引擎类
+    提供以下接口:
+    query: 类方法，依据给定的参数，从数据文件中查询相应的数据
+    insert: 类方法，依据给定的参数，向数据文件中插入数据
+    remove_data: 类方法，将数据库中给定的数据删除
+    move_to: 类方法，将给定的数据移动到其他给定的位置
+
+    Parameter
+    ---------
+    params: database.db.ParamsParser
+    '''
+    def __init__(self, params):
+        self._properties = None
+        self._params = None
+        self._parse_path()
+
+    def _parse_path(self):
+        '''
+        将相对路径解析为数据的绝对路径
+        '''
+        params = self._params
+        rel_path = params.rel_path.replace('.', sep)
+        params.set_absolute_path(join(params.main_path, rel_path))
+
+    def insert(cls, data, params):
+        '''
+        类方法，将给定的数据插入到数据文件中
+
+        Parameter
+        ---------
+        data: pandas.DataFrame or pandas.Series
+
+        params: database.db.ParamsParser
+
+        Return
+        ------
+        result: boolean
+        '''
+        obj = cls(params)
+        data = DataWrapper.init_from_pd(data)
+        if not exists(obj._params.absolute_path):   # 首次插入数据，数据文件夹不存在
+            makedirs(obj._params.absolute_path)
+            new_metadata = {'start time': data.start_time.strftime(DB_CONFIG['db_time_format']),
+                        'ent time': data.end_time.strftime(DB_CONFIG['db_time_format']),
+                        'data category': params.store_fmt[-1].name,
+                        'time length': len(data),
+                        'filled status': FilledStatus.FILLED.name}
+            # 占位符，后续需要使用数据文件本地的元数据(若存在)，必须保证程序中存在metadata变量
+            # 若后面出现与此占位符相关的错误，表示代码逻辑上有漏洞
+            metadata = None
+        else:   # 对现有数据的元数据进行更新
+            obj._load_metadata()
+            metadata = obj._properties
+            data = data.drop_before_date(metadata['end time'])
+            if len(data) == 0:   # 剔除后没有数据
+                return False
+            if data.data_category == DataFormatCategory.PANEL:  # 事先对代码顺序进行更新
+                data.rearrange_symbol(metadata['symbols'])
+            new_metadata = {'start time': metadata['start time'],
+                            'end time': data.end_time.strftime(DB_CONFIG['db_time_format']),
+                            'data category': metadata['data category'].name,
+                            'time length': metadata['time length'] + len(data),
+                            'filled status': FilledStatus.FILLED.name}
+        if data.data_category == DataFormatCategory.PANEL:
+            new_metadata['symbol length'] = len(data.symbol_index)
+            new_metadata['symbols'] = data.symbol_index
+        splited_data = data.split_data()
+        for fn in sorted(splited_data.keys()):
+            file_name = join(obj._params.absolute_path, fn + SUFFIX)
+            tmp_data = splited_data[fn]
+            if exists(file_name):   # 数据文件存在，则必然存在元数据文件
+                with open(file_name, 'r') as f:
+                    exist_data = DataWrapper.init_from_files([f], metadata)
+                    tmp_data.update(exist_data)
+            with open(file_name, 'w') as f:
+                tobe_dumped = tmp_data.to_jsonformat()
+                json.dump(tobe_dumped, f)
+        obj._update_metadata(new_metadata)
+
+
+    def query(cls, params):
+        pass
+
+    def remove_data(cls, params):
+        pass
+
+    def move_to(cls, src_params, dest_params):
+        pass
+
+    def _parse_filenames(self):
+        '''
+        将参数中给定的时间区间或者时间点解析为对应的文件名列表，仅用于请求数据的情况
+
+        Return
+        ------
+        out: list
+            元素为数据的绝对路径(包含文件类型后缀)
+        '''
+        params = self._params
+        if params.end_time is None:  # 表示请求的是横截面的数据
+            return [date2filename(params.start_time)]
+        else:
+            return date2filenamelist(params.start_time, params.end_time)
+
+    def _update_metadata(self, new_property):
+        '''
+        将元数据更新为给定的数据
+
+        Parameter
+        ---------
+        new_property: dict
+            格式如下，{'start time': st, 'end time': et, 'data category': dc, 'filled status': fs,
+            'time length': tl, 'symbol length'(optional): sl, 'symbols'(optional): s}
+        '''
+        with open(join(self._params.absolute_path, METADATA_FILENAME), 'w') as f:
+            json.dump(new_property, f)
+
+    @staticmethod
+    def _trans_metadata(json_metadata):
+        '''
+        将从JSON文件中读取出来的文件夹中的元数据文件进行转换
+
+        Parameter
+        ---------
+        json_metadata: dict
+
+        Return
+        ------
+        meta_data: dict
+        '''
+        meta_data = deepcopy(json_metadata)
+        meta_data['start time'] = pd.to_datetime(meta_data['start time'])
+        meta_data['end time'] = pd.to_datetime(meta_data['end time'])
+        meta_data['data category'] = DataFormatCategory[meta_data['data category']]
+        meta_data['filled status'] = FilledStatus[meta_data['filled status']]
+        return meta_data
+
+    def _load_metadata(self):
+        '''
+        从文件中加载元数据，该函数假设元数据文件存在，若文件不存在将自动引发FileNotFoundError
+        '''
+        with open(join(self._params.absolute_path, METADATA_FILENAME), 'r') as f:
+            self._properties = self._trans_metadata(json.load(f))
 
