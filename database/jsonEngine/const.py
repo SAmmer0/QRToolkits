@@ -6,7 +6,7 @@ import enum
 from database.utils import submodule_initialization, set_logger
 from database.const import DataFormatCategory, NaS, FilledStatus
 
-SUBMODULE_NAME = 'json5db'
+SUBMODULE_NAME = 'jsondb'
 # 设置日志选项
 DB_CONFIG = submodule_initialization(SUBMODULE_NAME, dirname(__file__))
 

@@ -15,6 +15,7 @@ from database.jsonEngine.const import LOGGER_NAME, DB_CONFIG, DataFormatCategory
 # 获取当前日志处理的句柄
 logger = logging.getLogger(LOGGER_NAME)
 
+# -------------------------------------------------------------------------------------------------------------
 # 函数
 def trans_metadata(json_metadata):
     '''
@@ -47,13 +48,22 @@ def date2filename(date):
     date: datetime like
 
     Return
+    ------
     out: string
+
+    Example
+    -------
+    假设频率为月份
+    >>> date2filename('2010-01-03')
+    '201001'
+    >>> date2filename('2018-04-05')
+    '201804'
     '''
     date = pd.to_datetime(date)
     if DB_CONFIG['data_spilt_frequency'] == 'YEAR':
         return date.strftime('%Y')
     elif DB_CONFIG['data_spilt_frequency'] == 'MONTH':
-        return date.strftime('%Y-%m')
+        return date.strftime('%Y%m')
     elif DB_CONFIG['data_spilt_frequency'] == 'QUARTER':
         year = date.year
         quarter = date.quarter
@@ -79,11 +89,11 @@ def date2filenamelist(start_time, end_time):
 
     Example
     -------
-    假设频率为季度
+    假设频率为季度，即QUARTER
     >>> date2filenamelist('2018-01-01', '2018-04-01')
-    >>> ['2018Q1', '2018Q2']
+    ['2018Q1', '2018Q2']
     >>> date2filenamelist('2017-01-01', '2018-01-01')
-    >>> ['2017Q1', '2017Q2', '2017Q3', '2017Q4', '2018Q1']
+    ['2017Q1', '2017Q2', '2017Q3', '2017Q4', '2018Q1']
     '''
     cycle_len_map = {'MONTH': 12, 'QUARTER': 4}
     start_file = date2filename(start_time)
@@ -113,7 +123,7 @@ def date2filenamelist(start_time, end_time):
 
 
 
-
+# -------------------------------------------------------------------------------------------------------------
 # 类
 
 class DataWrapper(object):
@@ -183,7 +193,7 @@ class DataWrapper(object):
             tmp_data = json.load(file_obj)
             if symbols is not None:  # PANEL数据
                 for t in tmp_data:
-                    tmp_data[t] = pd.Series(zip(symbols, tmp_data[t]))
+                    tmp_data[t] = pd.Series(zip(symbols, tmp_data[t]), index=symbols)
                 tmp_data = pd.DataFrame(tmp_data).T.fillna(NaS)
             else:  # TIME SERIES数据
                 tmp_data = pd.Series(tmp_data)
@@ -270,10 +280,38 @@ class DataWrapper(object):
         Return
         ------
         out: dict
-            格式为{file_name(withour suffix): DataWrapper}
+            格式为{file_name(without suffix): DataWrapper}
         '''
-        pass
+        tmp_data = self.data
+        assigned_groups = tmp_data.groupby(date2filename)
+        out = {}
+        for fn in assigned_groups.groups:
+            g_data = assigned_groups.get_group(fn)
+            out[fn] = DataWrapper.init_from_pd(g_data)
+        return out
 
+    def to_jsonformat(self):
+        '''
+        将数据转换为JSON的形式
+
+        Return
+        ------
+        out: dict
+            格式为{file_name(without suffix): dict}，元素中dict的格式与数据文件的格式相同，即
+            若为面板数据则为{date: ['sample1', 'sample2', ...]}，若为时间序列数据则为{date: 'sample1', ...}
+            返回的数据都为内置字典类型数据，键没有强制的顺序，在存储过程中需要注意
+        Notes
+        -----
+        若为PANEL数据，所有导出的数据代码的顺序都以symbol_index为准，若需要对应的修改元数据中的universe则需要从
+        symbol_index中读取
+        '''
+        if self._data_category == DataFormatCategory.PANEL:  # PANEL数据
+            out = {}
+            for date, data in self._data.iterrows():
+                out[date] = data.tolist()
+            return out
+        else:   # TIME SERIES数据
+            return self._data.to_dict()
 
     @property
     def start_time(self):
@@ -288,7 +326,7 @@ class DataWrapper(object):
         return self._data_category
 
     @property
-    def symbol_list(self):
+    def symbol_index(self):
         if self._data_category == DataFormatCategory.TIME_SERIES:
             return None
         return self._data.columns.tolist()
@@ -299,5 +337,4 @@ class DataWrapper(object):
 
     def __len__(self):
         return len(self._data)
-
 
