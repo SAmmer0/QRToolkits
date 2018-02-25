@@ -988,9 +988,11 @@ class HDF5Engine(DBEngine):
             目标数据文件相关设定参数
         '''
         from shutil import move
+        dest_obj = cls(dest_params)
+        if exists(dest_obj._params.absolute_path):  # 目标数据已经存在
+            raise ValueError('Cannot move to an existing position!')
+        src_obj = cls(src_params)
         try:
-            src_obj = cls(src_params)
-            dest_obj = cls(dest_params)
             move(src_obj._params.absolute_path, dest_obj._params.absolute_path)
         except Exception:
             return False
