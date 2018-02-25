@@ -6,8 +6,9 @@ import logging
 import json
 from copy import deepcopy
 from functools import reduce
-from os import sep, makedirs
+from os import sep, makedirs, removedirs
 from os.path import join, exists
+from shutil import move
 
 import pandas as pd
 
@@ -356,6 +357,7 @@ class JSONEngine(DBEngine):
         rel_path = params.rel_path.replace('.', sep)
         params.set_absolute_path(join(params.main_path, rel_path))
 
+    @classmethod
     def insert(cls, data, params):
         '''
         类方法，将给定的数据插入到数据文件中
@@ -411,15 +413,84 @@ class JSONEngine(DBEngine):
                 json.dump(tobe_dumped, f)
         obj._update_metadata(new_metadata)
 
-
+    @classmethod
     def query(cls, params):
-        pass
-
+        '''
+        类方法，从数据文件中查询给定的数据
+        
+        Parameter
+        ---------
+        params: database.db.ParamsParser
+            start_time属性必须为非空，若end_time属性为None，则视作查询时点数据(仅支持PANEL)，反之则为查询时间序列数据
+        
+        Return
+        ------
+        out: pandas.DataFrame(PANEL) or pandas.Series(TIME_SERIES OR CROSS_SECTION)
+        '''
+        if params.start_time is None:
+            raise ValueError('start_time property cannot be None!')
+        obj = cls(params)
+        metadata = obj._load_metadata()
+        if metadata['data category'] == DataFormatCategory.TIME_SERIES and params.end_time is None: # 时间序列不能请求时点数据
+            raise ValueError('Time series data cannot query PIT data!')
+        file_names = obj._parse_filenames()
+        opened_files = []
+        try:
+            for fn in self._parse_filenames():
+                file_path = join(obj._params.absolute_path, fn + SUFFIX)
+                if not exists(file_path):
+                    continue
+                opened_files.append(open(file_path, 'r'))
+            data = DataWrapper.init_from_files(opened_files, metadata)
+        finally:
+            for fobj in opened_files:
+                fobj.close()
+        if params.end_time is None:
+            try:
+                out = data.loc[params.start_time]
+            except KeyError:
+                out = None
+        else:
+            mask = (data.index >= params.start_time) & (data.index <= params.end_time)
+            out = data.loc[mask]
+            if len(out) == 0:
+                out = None
+        return out
+        
+    @classmethod
     def remove_data(cls, params):
-        pass
-
+        '''
+        将给定的数据删除
+        
+        Parameter
+        ---------
+        params: database.db.ParamsParser
+        
+        Return
+        ------
+        result: boolean
+        '''
+        try:
+            obj = cls(params)
+            removedirs(obj._params.absolute_path)
+        except Exception as e:
+            return False
+        return True
+        
+    @classmethod
     def move_to(cls, src_params, dest_params):
-        pass
+        '''
+        将给定的数据移动到另外其他给定位置
+        '''
+        dest_obj = cls(dest_params)
+        if exists(dest_obj._params.absolute_path):
+            raise ValueError('Cannot not move to an exsiting position!')
+        src_obj = cls(src_params)
+        try:
+            move(src_obj._params.absolute_path, dest_obj._params.absolute_path)
+        except Exception as e:
+            return False
+        return True
 
     def _parse_filenames(self):
         '''
