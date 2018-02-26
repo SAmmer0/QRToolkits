@@ -6,9 +6,9 @@ import logging
 import json
 from copy import deepcopy
 from functools import reduce
-from os import sep, makedirs, removedirs
+from os import sep, makedirs
 from os.path import join, exists
-from shutil import move
+from shutil import move, rmtree
 
 import pandas as pd
 
@@ -184,10 +184,11 @@ class DataWrapper(object):
             tmp_data = json.load(file_obj)
             if symbols is not None:  # PANEL数据
                 for t in tmp_data:
-                    tmp_data[t] = pd.Series(zip(symbols, tmp_data[t]), index=symbols)
+                    tmp_data[t] = pd.Series(dict(zip(symbols, tmp_data[t])), index=symbols)
                 tmp_data = pd.DataFrame(tmp_data).T.fillna(NaS)
             else:  # TIME SERIES数据
                 tmp_data = pd.Series(tmp_data)
+            tmp_data.index = pd.to_datetime(tmp_data.index)
             return cls.init_from_pd(tmp_data)
 
         symbols = meta_data['symbols'] if meta_data['data category'] == DataFormatCategory.PANEL else None
@@ -251,7 +252,7 @@ class DataWrapper(object):
         if self.data_category != other.data_category:
             raise ValueError('Incompatible data category, {dc} required, but {pdc} is provided'.
                              format(dc=self.data_category, pdc=other.data_category))
-        if not other.start_time <= self.start_time <= other.end_time <= self.end_time:
+        if not (other.start_time <= self.start_time and other.end_time <= self.end_time):
             import warnings
             warnings.warn('Improper time order', RuntimeWarning)
             return
@@ -298,7 +299,8 @@ class DataWrapper(object):
         if self._data_category == DataFormatCategory.PANEL:  # PANEL数据
             out = {}
             for date, data in self._data.iterrows():
-                out[date] = data.tolist()
+                date_key = date.strftime(DB_CONFIG['db_time_format'])
+                out[date_key] = data.tolist()
             return out
         else:   # TIME SERIES数据
             return self._data.to_dict()
@@ -346,7 +348,7 @@ class JSONEngine(DBEngine):
     '''
     def __init__(self, params):
         self._properties = None
-        self._params = None
+        self._params = params
         self._parse_path()
 
     def _parse_path(self):
@@ -377,22 +379,22 @@ class JSONEngine(DBEngine):
         if not exists(obj._params.absolute_path):   # 首次插入数据，数据文件夹不存在
             makedirs(obj._params.absolute_path)
             new_metadata = {'start time': data.start_time.strftime(DB_CONFIG['db_time_format']),
-                        'ent time': data.end_time.strftime(DB_CONFIG['db_time_format']),
-                        'data category': params.store_fmt[-1].name,
-                        'time length': len(data),
-                        'filled status': FilledStatus.FILLED.name}
+                            'end time': data.end_time.strftime(DB_CONFIG['db_time_format']),
+                            'data category': params.store_fmt[-1].name,
+                            'time length': len(data),
+                            'filled status': FilledStatus.FILLED.name}
             # 占位符，后续需要使用数据文件本地的元数据(若存在)，必须保证程序中存在metadata变量
             # 若后面出现与此占位符相关的错误，表示代码逻辑上有漏洞
             metadata = None
         else:   # 对现有数据的元数据进行更新
             obj._load_metadata()
             metadata = obj._properties
-            data = data.drop_before_date(metadata['end time'])
+            data.drop_before_date(metadata['end time'])
             if len(data) == 0:   # 剔除后没有数据
                 return False
             if data.data_category == DataFormatCategory.PANEL:  # 事先对代码顺序进行更新
                 data.rearrange_symbol(metadata['symbols'])
-            new_metadata = {'start time': metadata['start time'],
+            new_metadata = {'start time': metadata['start time'].strftime(DB_CONFIG['db_time_format']),
                             'end time': data.end_time.strftime(DB_CONFIG['db_time_format']),
                             'data category': metadata['data category'].name,
                             'time length': metadata['time length'] + len(data),
@@ -412,17 +414,18 @@ class JSONEngine(DBEngine):
                 tobe_dumped = tmp_data.to_jsonformat()
                 json.dump(tobe_dumped, f)
         obj._update_metadata(new_metadata)
+        return True
 
     @classmethod
     def query(cls, params):
         '''
         类方法，从数据文件中查询给定的数据
-        
+
         Parameter
         ---------
         params: database.db.ParamsParser
             start_time属性必须为非空，若end_time属性为None，则视作查询时点数据(仅支持PANEL)，反之则为查询时间序列数据
-        
+
         Return
         ------
         out: pandas.DataFrame(PANEL) or pandas.Series(TIME_SERIES OR CROSS_SECTION)
@@ -456,27 +459,27 @@ class JSONEngine(DBEngine):
             if len(out) == 0:
                 out = None
         return out
-        
+
     @classmethod
     def remove_data(cls, params):
         '''
         将给定的数据删除
-        
+
         Parameter
         ---------
         params: database.db.ParamsParser
-        
+
         Return
         ------
         result: boolean
         '''
         try:
             obj = cls(params)
-            removedirs(obj._params.absolute_path)
+            rmtree(obj._params.absolute_path)
         except Exception as e:
             return False
         return True
-        
+
     @classmethod
     def move_to(cls, src_params, dest_params):
         '''
