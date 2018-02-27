@@ -42,7 +42,7 @@
         // to make read and write more efficient, the data are stored in different files dependent
         // on its time, the supported split frequencies are ["YEAR", "MONTH", "QUARTER"], for example,
         // if it's set "YEAR", the file named "2017.json" will contain data from 2017-01-01 to 2017-12-31
-        "data_spilt_frequency": "YEAR",
+        "data_spilt_frequency": "QUARTER",
         "log":{
             // whether the database use an independent log file
             "enable_log": true,

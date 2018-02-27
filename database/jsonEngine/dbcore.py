@@ -235,7 +235,7 @@ class DataWrapper(object):
             return
         diff = sorted(self._data.columns.difference(symbol_order), reverse=False)
         new_order = symbol_order + diff
-        self._data = self._data.reindex(columns=new_order)
+        self._data = self._data.reindex(columns=new_order).fillna(NaS)
 
     def update(self, other):
         '''
@@ -303,7 +303,7 @@ class DataWrapper(object):
                 out[date_key] = data.tolist()
             return out
         else:   # TIME SERIES数据
-            return self._data.to_dict()
+            return self._data.reindex(self._data.index.strftime(DB_CONFIG['db_time_format'])).to_dict()
 
     @property
     def start_time(self):
@@ -433,13 +433,14 @@ class JSONEngine(DBEngine):
         if params.start_time is None:
             raise ValueError('start_time property cannot be None!')
         obj = cls(params)
-        metadata = obj._load_metadata()
+        obj._load_metadata()
+        metadata = obj._properties
         if metadata['data category'] == DataFormatCategory.TIME_SERIES and params.end_time is None: # 时间序列不能请求时点数据
             raise ValueError('Time series data cannot query PIT data!')
         file_names = obj._parse_filenames()
         opened_files = []
         try:
-            for fn in self._parse_filenames():
+            for fn in obj._parse_filenames():
                 file_path = join(obj._params.absolute_path, fn + SUFFIX)
                 if not exists(file_path):
                     continue
@@ -448,14 +449,16 @@ class JSONEngine(DBEngine):
         finally:
             for fobj in opened_files:
                 fobj.close()
+
+        pddata = data.data
         if params.end_time is None:
             try:
-                out = data.loc[params.start_time]
+                out = pddata.loc[params.start_time]
             except KeyError:
                 out = None
         else:
-            mask = (data.index >= params.start_time) & (data.index <= params.end_time)
-            out = data.loc[mask]
+            mask = (pddata.index >= params.start_time) & (pddata.index <= params.end_time)
+            out = pddata.loc[mask]
             if len(out) == 0:
                 out = None
         return out
