@@ -25,7 +25,7 @@ query_end_time = '2017-12-04'
 
 sample_data = query('ZX_IND', (sample_start_time, sample_end_time))
 
-db_path = r'C:\Users\c\Desktop\test\json_test'
+db_path = r'C:\Users\c\Desktop\test'
 json_db = 'df_query_test'
 folder_path = join(db_path, json_db)
 if exists(folder_path):

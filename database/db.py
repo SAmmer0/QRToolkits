@@ -17,6 +17,7 @@ from numpy import dtype as np_dtype
 
 from database.const import DataClassification, DataValueCategory, DataFormatCategory
 from database.hdf5Engine.dbcore import HDF5Engine
+from database.jsonEngine.dbcore import JSONEngine
 
 class StoreFormat(object):
     '''
@@ -24,10 +25,10 @@ class StoreFormat(object):
     提供方法如下:
     from_iterable: 使用类方法构造对象
     validate: 返回当前分类分类是否合理
-    提供属性如下: 
+    提供属性如下:
     level: int，分类的层级
     data: tuple，分类详情，所有分类必须是enum.Enum的子类
-    
+
     Notes
     -----
     目前只支持三层分类，第一层为DataClassfication，第二层为DataValueCategory，第三层为DataFormatCategory
@@ -39,17 +40,17 @@ class StoreFormat(object):
                       DataValueCategory.NUMERIC: [DataFormatCategory.PANEL, DataFormatCategory.TIME_SERIES],
                       None: [None]}
         self._data = None
-        
+
     @classmethod
     def from_iterable(cls, iterable):
         '''
         使用可迭代对象构造对象
-        
+
         Parameter
         ---------
         iterable: iterable
             可迭代对象，每个元素为enum.Enum的子类
-        
+
         Return
         ------
         obj: StoreFormat
@@ -61,12 +62,12 @@ class StoreFormat(object):
                 raise TypeError('Elements must bet the subtype of enum.Enum')
         obj._data = tuple(data)
         return obj
-    
+
     def validate(self):
         '''
         验证当前分类数据是否符合规则
-        
-        Return 
+
+        Return
         ------
         validated: boolean
             若符合规则，返回True，反之返回False
@@ -81,33 +82,33 @@ class StoreFormat(object):
                 return False
             last_cate = cate
         return True
-    
+
     def __eq__(self, other):
         for cate1, cate2 in zip(self, other):
             if cate1 != cate2:
                 return False
             return True
-    
+
     def __iter__(self):
         return iter(self._data)
-    
+
     @property
     def data(self):
         return self._data
-    
+
     @property
     def level(self):
         return len(self._data)
-    
+
     def __getitem__(self, level):
         '''
         获取给定level的分类值
-        
+
         Parameter
         ---------
         level: int
             所需要获取的分类的等级，0表示第一级，1表示第二级，...，以此类推
-            
+
         Return
         ------
         out: enum.Enum
@@ -117,8 +118,8 @@ class StoreFormat(object):
 class ParamsParser(object):
     '''
     参数解析类，用于对传入数据库引擎的数据进行包装
-    
-    该类提供一下方法: 
+
+    该类提供一下方法:
     from_dict: 类方法，从参数字典中对对象进行初始化
     get_engine: 通过定义的规则获取对应的数据引擎
     parse_relpath: 将相对路径解析为绝对路径
@@ -127,7 +128,10 @@ class ParamsParser(object):
         self._main_path = None
         self._start_time = None
         self._end_time = None
-        self._engine_map_rule = {(DataClassification.STRUCTURED, DataValueCategory.NUMERIC): HDF5Engine}
+        self._engine_map_rule = {(DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL): HDF5Engine,
+                                 (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES): HDF5Engine,
+                                 (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.PANEL): JSONEngine,
+                                 (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.TIME_SERIES): JSONEngine}
         # 参数组合校验字典，键为(start_time is None, end_time is None)，值为对应的存储类型
         self._validation_rule = {(False, False): StoreFormat.from_iterable((DataClassification.STRUCTURED, )),
                                  (True, False): StoreFormat.from_iterable((DataClassification.STRUCTURED,)),
@@ -137,20 +141,20 @@ class ParamsParser(object):
         self._rel_path = None
         self._absolute_path = None
         self._dtype = None
-    
+
     @classmethod
     def from_dict(cls, db_path, params):
         '''
         使用字典类型的参数数据构造参数解析类
-        
+
         Parameter
         ---------
         db_path: string
             数据库的绝对路径
         params: dict
-            字典类型的参数，参数域包含['rel_path'(必须)(string), 'start_time'(datetime), 
+            字典类型的参数，参数域包含['rel_path'(必须)(string), 'start_time'(datetime),
             'end_time'(datetime), 'store_fmt'(StoreFormat), 'dtype'(numpy.dtype)]
-        
+
         Return
         ------
         obj: ParamsParser
@@ -173,65 +177,65 @@ class ParamsParser(object):
         if not obj.store_fmt.validate():
             raise ValueError("Invalid parameter group!")
         return obj
-    
+
     def get_engine(self):
         '''
         获取对应的数据库引擎
         '''
         return self._engine_map_rule[self._store_fmt.data]
-    
+
     def set_absolute_path(self, abs_path):
         '''
         设置数据的绝对路径，路径的格式由设置的数据引擎规定，该方法仅由数据引擎调用，与该方法配对
         的有absolute_path只读属性，用于获取设置的absolute_path，将操作设置为方法是为了强调该方法仅
         能由数据引擎使用设置成descriptor可能会误导
-        
+
         Parameter
         ---------
         abs_path: string
             由数据引擎自行解析的绝对路径
         '''
         self._absolute_path = abs_path
-        
+
 
     @property
     def start_time(self):
         return self._start_time
-    
+
     @property
     def end_time(self):
         return self._end_time
-    
+
     @property
     def main_path(self):
         return self._main_path
-    
+
     @property
     def rel_path(self):
         return self._rel_path
-    
+
     @property
     def absolute_path(self):
         return self._absolute_path
-    
+
     @property
     def store_fmt(self):
         return self._store_fmt
-    
+
     @property
     def dtype(self):
         return self._dtype
-        
+
 
 class Database(object):
     '''
     主数据库接口类，用于处理与外界的交互
-    目前支持以下方法: 
+    目前支持以下方法:
     query: 获取请求的数据
     insert: 将数据存储到本地
     remove_data: 将给定路径的数据删除
     move_to: 将给定的数据移动到其他位置
-    
+
     Parameter
     ---------
     db_path: string
@@ -239,11 +243,11 @@ class Database(object):
     '''
     def __init__(self, db_path):
         self._main_path = db_path
-    
+
     def query(self, rel_path, store_fmt, start_time=None, end_time=None):
         '''
         查询数据接口
-        
+
         Parameter
         ---------
         rel_path: string
@@ -255,19 +259,19 @@ class Database(object):
             而end_time参数需要为None
         end_time: datetime like
             数据结束时间(可选)
-        
+
         Return
         ------
         out: pandas.Series, pandas.DataFrame or object
         '''
-        params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path, 
+        params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
                                                         'store_fmt': store_fmt,
-                                                        'start_time': start_time, 
+                                                        'start_time': start_time,
                                                         'end_time': end_time})
         # 时间参数校验规则，键为(start_time is None, end_time is None)，值为对应的数据结构分类
         validation_rule = {(True, True): DataClassification.UNSTRUCTURED,
                            (False, False): DataClassification.STRUCTURED,
-                           (False, True): DataClassification.STURCTURED,
+                           (False, True): DataClassification.STRUCTURED,
                            (True, False): None}
         time_flag = (start_time is None, end_time is None)
         vclassification = validation_rule[time_flag]
@@ -276,11 +280,11 @@ class Database(object):
         engine = params.get_engine()
         data = engine.query(params)
         return data
-    
-    def insert(self, data, rel_path, store_fmt, dtype):
+
+    def insert(self, data, rel_path, store_fmt, dtype=None):
         '''
         存储数据接口
-        
+
         Parameter
         ---------
         data: pandas.Series, pandas.DataFrame or object
@@ -289,8 +293,8 @@ class Database(object):
             数据的相对路径
         store_fmt: StoreFormat or iterable
             数据存储格式分类
-        dtype: numpy.dtype like
-            数据存储类型
+        dtype: numpy.dtype like, default None
+            数据存储类型，目前仅数值型数据需要提供该参数
         Return
         ------
         issuccess: boolean
@@ -302,18 +306,18 @@ class Database(object):
         engine = params.get_engine()
         issuccess = engine.insert(data, params)
         return issuccess
-    
+
     def remove_data(self, rel_path, store_fmt):
         '''
         将给定路径的数据删除
-        
+
         Parameter
         ---------
         rel_path: string
             数据的相对路径
         store_fmt: StoreFormat
             数据存储方式分类
-        
+
         Return
         ------
         issuccess: boolean
@@ -323,28 +327,28 @@ class Database(object):
         engine = params.get_engine()
         issuccess = engine.remove_data(params)
         return issuccess
-        
-    
+
+
     def move_to(self, source_rel_path, dest_rel_path, store_fmt):
         '''
         将数据有原路径移动到新的路径下
-        
+
         source_rel_path: string
             原存储位置的相对路径
         dest_rel_path: string
             目标存储位置的相对路径
         store_fmt: StoreFormat
             数据存储方式分类
-        
+
         Return
         ------
         issuccess: boolean
         '''
-        src_params = ParamsParser.from_dict(self._main_path, {'rel_path': source_rel_path, 
+        src_params = ParamsParser.from_dict(self._main_path, {'rel_path': source_rel_path,
                                                             'store_fmt': store_fmt})
         dest_params = ParamsParser.from_dict(self._main_path, {'rel_path': dest_rel_path,
                                                              'store_fmt': store_fmt})
         engine = src_params.get_engine()
         issuccess = engine.move_to(src_params, dest_params)
         return issuccess
-        
+
