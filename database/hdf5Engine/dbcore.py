@@ -538,7 +538,7 @@ class Reader(object):
                             'data category': DataFormatCategory[store.attrs['data category']],
                             'column size': store.attrs['column size'],
                             'data': {'dtype': np.dtype(store['data'].attrs['dtype'])}}
-            if self._params.store_fmt[-1] == DataFormatCategory.PANEL: # 这里假设最后一级存储格式为DataFromatCategory类型
+            if self._params.store_fmt[2] == DataFormatCategory.PANEL: # 这里假设第三级存储格式为DataFromatCategory类型
                 self.properties.update({'symbol': {'length': store['symbol'].attrs['length']}})
                 self.symbols = SymbolIndex.init_from_dataset(store['symbol'])
         except OSError:
@@ -658,8 +658,8 @@ class Writer(object):
             store['time'].attrs['start_time'] = NaS
             # 属性初始化
             store.attrs['filled status'] = FilledStatus.EMPTY.name
-            store.attrs['data category'] = params.store_fmt[-1].name
-            if params.store_fmt[-1] == DataFormatCategory.PANEL:   # 面板数据初始化
+            store.attrs['data category'] = params.store_fmt[2].name
+            if params.store_fmt[2] == DataFormatCategory.PANEL:   # 面板数据初始化
                 store.create_dataset('symbol', shape=(1, ), maxshape=(None, ),
                                      dtype=DB_CONFIG['symbol_dtype'])
                 store.create_dataset('data', shape=(1, col_size),

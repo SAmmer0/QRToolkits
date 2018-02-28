@@ -380,7 +380,7 @@ class JSONEngine(DBEngine):
             makedirs(obj._params.absolute_path)
             new_metadata = {'start time': data.start_time.strftime(DB_CONFIG['db_time_format']),
                             'end time': data.end_time.strftime(DB_CONFIG['db_time_format']),
-                            'data category': params.store_fmt[-1].name,
+                            'data category': params.store_fmt[2].name,
                             'time length': len(data),
                             'filled status': FilledStatus.FILLED.name}
             # 占位符，后续需要使用数据文件本地的元数据(若存在)，必须保证程序中存在metadata变量
