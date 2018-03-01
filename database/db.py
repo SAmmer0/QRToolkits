@@ -11,14 +11,44 @@ ParamsParser: 通用参数类
 import enum
 import os.path as path
 from os import remove as os_remove
+import warnings
+import json
 
 from pandas import to_datetime
 from numpy import dtype as np_dtype
 
-from database.const import DataClassification, DataValueCategory, DataFormatCategory
+from database.const import DataClassification, DataValueCategory, DataFormatCategory, ENCODING
 from database.hdf5Engine.dbcore import HDF5Engine
 from database.jsonEngine.dbcore import JSONEngine
 
+# ----------------------------------------------------------------------------------------------
+# 函数
+def strs2StoreFormat(t):
+    '''
+    将字符串元组解析成为StoreFormat
+    主要是为了避免日后对StoreFormat的格式进行拓展导致需要修改的地方太多
+
+    Parameter
+    ---------
+    t: tuple
+        按照给定顺序设置的字符串类型元组
+
+    Return
+    ------
+    out: StoreFormat
+    '''
+    if len(t) > 3:
+        raise NotImplementedError
+    fmt = []
+    formater = [DataClassification, DataValueCategory, DataFormatCategory]
+    max_length = len(formater) if len(formater) > len(t) else len(t)
+    for idx in range(max_length):
+        fmt.append(formater[idx][t[idx]])
+    return StoreFormat.from_iterable(fmt)
+
+
+# ----------------------------------------------------------------------------------------------
+# 类
 class StoreFormat(object):
     '''
     数据存储格式的分类
@@ -83,6 +113,20 @@ class StoreFormat(object):
             last_cate = cate
         return True
 
+    def to_strtuple(self):
+        '''
+        将各个分类详情对象转化为字符串形式
+
+        Return
+        ------
+        out: tuple
+            每个元素为按照顺序排列的分类对象的字符串形式
+        '''
+        out = []
+        for c in self._data:
+            out.append(c.name)
+        return out
+
     def __eq__(self, other):
         for cate1, cate2 in zip(self, other):
             if cate1 != cate2:
@@ -114,6 +158,7 @@ class StoreFormat(object):
         out: enum.Enum
         '''
         return self._data[level]
+
 
 class ParamsParser(object):
     '''
@@ -351,4 +396,216 @@ class Database(object):
         engine = src_params.get_engine()
         issuccess = engine.move_to(src_params, dest_params)
         return issuccess
+
+    def find_data(self, name):
+        '''
+        查找给定数据或者数据集合名下的所有数据信息
+
+        Parameter
+        ---------
+        name: string
+            数据或者数据集合的名称
+
+        Return
+        ------
+        out: list
+            元素为字典形式，格式为{'rel_path': rel_path, 'store_fmt': store_fmt}
+        '''
+        pass
+
+    def _load_meta(self):
+        '''
+        加载该数据库的元数据
+        '''
+        pass
+
+    def _find(self, name, match_func):
+        '''
+        具体实现数据或者数据集合名查找的函数
+
+        Parameter
+        ---------
+        name: string
+            数据或者数据集合的名称
+        match_func: callable
+            判断两个名字是否相匹配的函数，格式签名为match_func(name, node_name)->boolean
+
+        Return
+        ------
+        node: DataNode
+            查找到的数据节点，若未找到，返回None
+        '''
+        passs
+
+    @staticmethod
+    def precisely_match(name, node_name):
+        '''
+        精确查找函数，即只有两个字符串相等才行
+
+        Parameter
+        ---------
+        name: string
+        node_name: string
+
+        Return
+        ------
+        result: boolean
+        '''
+        pass
+
+    def _updat_meta(self):
+        '''
+        依据操作更新数据文件树，并且将更新后的结构写入到元数据中
+        '''
+        pass
+
+
+class DataNode(object):
+    '''
+    文件结构树节点类，用于标识数据库中各个数据文件(夹)之间的包含关系，其中根节点的parent为None
+
+    Parameter
+    ---------
+    node_name: string
+        当前节点名称，即数据文件的名称
+    store_fmt: StoreFormat, default None
+        仅叶子节点为非空
+    '''
+    def __init__(self, node_name, store_fmt=None):
+        self._node_name = node_name
+        self._store_fmt = store_fmt
+        self._children = {}
+        self._parent = None
+
+    @classmethod
+    def init_from_meta(cls, meta_data):
+        '''
+        从存储有数据文件结构的文件中对数进行初始化，目前使用BFS算法
+
+        Parameter
+        ---------
+        meta_data: dict
+            字典的形式如下:
+            {
+                "node_name": db_name,
+                "children": [
+                    {"node_name": folder1,
+                    "children": [{"node_name": data11, "store_fmt": store_fmt}, {}, ...]},
+                    {"node_name": folder2,
+                    "children": [{}, {}, ...]},
+                    ...
+                ]
+            }
+            只有叶子节点没有children键
+
+        Return
+        ------
+        obj: DataNode
+            存储有当前数据的节点
+        '''
+        if 'children' in meta_data:   # 表示当前不是叶子节点
+            obj = cls(meta_data['node_name'])
+            for child_meta in meta_data['children']:
+                child_obj = cls.init_from_meta(child_meta)
+                obj.add_child(child_obj)
+            return obj
+        else:   # 叶子节点
+            obj = cls(meta_data['node_name'], strs2StoreFormat(meta_data['store_fmt']))
+            return obj
+
+
+    def add_child(self, child):
+        '''
+        向该节点添加直接连接的子节点，并且将子节点的母节点设置为当前节点
+
+        Parameter
+        ---------
+        child: DataNode
+        '''
+        child._parent = self
+        self._children[child.node_name] = child
+
+    def delete_child(self, child):
+        '''
+        将给定名称的(直接连接的)节点从该节点的子节点中删除，同时也将子节点的母节点重置为None
+
+        Parameter
+        ---------
+        child: string
+            子节点的节点名称，即node_name
+
+        Return
+        ------
+        result: boolean
+        '''
+        if not self.has_child(child):
+            warnings.warn("Delete a child which does not exist!", RuntimeWarning)
+            return False
+        del self._children[child]
+
+    def has_child(self, child):
+        '''
+        判断给定的节点名称是否是当前节点的直接连接的子节点
+
+        Parameter
+        ---------
+        child: string
+            子节点名称
+
+        Return
+        ------
+        result: boolean
+        '''
+        return child in self._children
+
+    def to_dict(self):
+        '''
+        将该节点的数据以字典的形式导出
+
+        Return
+        ------
+        out: dict
+            字典的形式如下:
+            {
+                "node_name": db_name,
+                "children": [
+                    {"node_name": folder1,
+                    "children": [{"node_name": data11, "store_fmt": store_fmt}, {}, ...]},
+                    {"node_name": folder2,
+                    "children": [{}, {}, ...]},
+                    ...
+                ]
+            }
+        '''
+        out = {}
+        out['node_name'] = self._node_name
+        if self.is_leaf:
+            out['store_fmt'] = list(self._store_fmt.to_strtuple())
+            return out
+        else:
+            children_list = []
+            for child in self._children.values():
+                children_list.append(child.to_dict())
+            out['children'] = children_list
+            return out
+
+    @property
+    def node_name(self):
+        return self._node_name
+
+    @property
+    def children(self):
+        return self._children
+
+    @property
+    def parent(self):
+        return self._parent
+
+    @property
+    def store_fmt(self):
+        return self._store_fmt
+
+    @property
+    def is_leaf(self):
+        return len(self._children) == 0
 
