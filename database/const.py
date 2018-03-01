@@ -8,7 +8,7 @@ Created on Wed Jan 10 15:18:54 2018
 from os.path import dirname, join
 import enum
 
-from qrtconst import REL_PATH_HEADER, REL_PATH_HEADER_LEN, NaS
+from qrtconst import REL_PATH_HEADER, REL_PATH_HEADER_LEN, NaS, ENCODING
 from qrtutils import trans_config_sep
 
 CONFIG_PATH = './config.json'

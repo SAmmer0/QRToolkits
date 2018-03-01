@@ -19,7 +19,8 @@ from database.jsonEngine.const import (LOGGER_NAME,
                                        FilledStatus,
                                        NaS,
                                        SUFFIX,
-                                       METADATA_FILENAME)
+                                       METADATA_FILENAME,
+                                       ENCODING)
 
 # 获取当前日志处理的句柄
 logger = logging.getLogger(LOGGER_NAME)
@@ -407,10 +408,10 @@ class JSONEngine(DBEngine):
             file_name = join(obj._params.absolute_path, fn + SUFFIX)
             tmp_data = splited_data[fn]
             if exists(file_name):   # 数据文件存在，则必然存在元数据文件
-                with open(file_name, 'r') as f:
+                with open(file_name, 'r', encoding=ENCODING) as f:
                     exist_data = DataWrapper.init_from_files([f], metadata)
                     tmp_data.update(exist_data)
-            with open(file_name, 'w') as f:
+            with open(file_name, 'w', encoding=ENCODING) as f:
                 tobe_dumped = tmp_data.to_jsonformat()
                 json.dump(tobe_dumped, f)
         obj._update_metadata(new_metadata)
@@ -444,7 +445,7 @@ class JSONEngine(DBEngine):
                 file_path = join(obj._params.absolute_path, fn + SUFFIX)
                 if not exists(file_path):
                     continue
-                opened_files.append(open(file_path, 'r'))
+                opened_files.append(open(file_path, 'r', encoding=ENCODING))
             data = DataWrapper.init_from_files(opened_files, metadata)
         finally:
             for fobj in opened_files:
@@ -523,7 +524,7 @@ class JSONEngine(DBEngine):
             格式如下，{'start time': st, 'end time': et, 'data category': dc, 'filled status': fs,
             'time length': tl, 'symbol length'(optional): sl, 'symbols'(optional): s}
         '''
-        with open(join(self._params.absolute_path, METADATA_FILENAME), 'w') as f:
+        with open(join(self._params.absolute_path, METADATA_FILENAME), 'w', encoding=ENCODING) as f:
             json.dump(new_property, f)
 
     @staticmethod
@@ -550,6 +551,6 @@ class JSONEngine(DBEngine):
         '''
         从文件中加载元数据，该函数假设元数据文件存在，若文件不存在将自动引发FileNotFoundError
         '''
-        with open(join(self._params.absolute_path, METADATA_FILENAME), 'r') as f:
+        with open(join(self._params.absolute_path, METADATA_FILENAME), 'r', encoding=ENCODING) as f:
             self._properties = self._trans_metadata(json.load(f))
 

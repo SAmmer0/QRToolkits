@@ -4,7 +4,7 @@ from os.path import dirname
 import enum
 
 from database.utils import submodule_initialization, set_logger
-from database.const import DataFormatCategory, NaS, FilledStatus
+from database.const import DataFormatCategory, NaS, FilledStatus, ENCODING
 
 SUBMODULE_NAME = 'jsondb'
 # 设置日志选项

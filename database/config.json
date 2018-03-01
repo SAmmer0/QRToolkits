@@ -1,5 +1,8 @@
 {
-// database configuration
+    // database configuration
+    // the folder saves all metadata of the database
+    "database_metadata_path": "~/Documents",
+    // the database engine name cannot be changed
     "hdf5db": {
         // Warning: HDF5 database is designed to store numerical data, any setting related
         // to string like data may lead to unpredictable outcome.

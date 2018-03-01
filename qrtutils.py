@@ -61,7 +61,7 @@ def trans_config_sep(path):
 
 def trans_config_pathes(config):
     '''
-    递归将所有配置的路径转化为系统分隔符模式
+    递归将所有配置的路径(配置选项中包含path关键字)转化为系统分隔符模式
 
     Parameter
     ---------

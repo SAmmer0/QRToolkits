@@ -12,3 +12,6 @@ REL_PATH_HEADER_LEN = len(REL_PATH_HEADER)
 
 # Not a String
 NaS = 'Not a String'
+
+# file encoding
+ENCODING = 'utf-8'
