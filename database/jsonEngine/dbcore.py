@@ -20,7 +20,8 @@ from database.jsonEngine.const import (LOGGER_NAME,
                                        NaS,
                                        SUFFIX,
                                        METADATA_FILENAME,
-                                       ENCODING)
+                                       ENCODING,
+                                       REL_PATH_SEP)
 
 # 获取当前日志处理的句柄
 logger = logging.getLogger(LOGGER_NAME)
@@ -357,7 +358,7 @@ class JSONEngine(DBEngine):
         将相对路径解析为数据的绝对路径
         '''
         params = self._params
-        rel_path = params.rel_path.replace('.', sep)
+        rel_path = params.rel_path.replace(REL_PATH_SEP, sep)
         params.set_absolute_path(join(params.main_path, rel_path))
 
     @classmethod

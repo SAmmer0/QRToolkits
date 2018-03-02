@@ -17,6 +17,9 @@ CONFIG_PATH = trans_config_sep(CONFIG_PATH)
 if CONFIG_PATH.startswith(REL_PATH_HEADER):
     CONFIG_PATH = join(dirname(__file__), CONFIG_PATH[REL_PATH_HEADER_LEN:])
 
+# 相对路径分隔符
+REL_PATH_SEP = '.'
+
 # 设置模块名称，主要用于日志记录中
 MODULE_NAME = 'qrt_database'
 

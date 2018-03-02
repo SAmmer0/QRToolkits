@@ -17,7 +17,8 @@ import pandas as pd
 import h5py
 import numpy as np
 
-from database.hdf5Engine.const import LOGGER_NAME, DB_CONFIG, DataFormatCategory, FilledStatus, NaS, SUFFIX
+from database.hdf5Engine.const import (LOGGER_NAME, DB_CONFIG, DataFormatCategory,
+                                       FilledStatus, NaS, SUFFIX, REL_PATH_SEP)
 from database.hdf5Engine.exceptions import InvalidInputTypeError, UnsupportDataTypeError
 from database.utils import DBEngine
 
@@ -1016,5 +1017,5 @@ class HDF5Engine(DBEngine):
         解析数据绝对路径
         '''
         params = self._params
-        rel_path = params.rel_path.replace('.', sep) + SUFFIX
+        rel_path = params.rel_path.replace(REL_PATH_SEP, sep) + SUFFIX
         params.set_absolute_path(join(params.main_path, rel_path))
