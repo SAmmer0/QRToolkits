@@ -9,17 +9,22 @@ StoreFormat: 数据存储类型
 ParamsParser: 通用参数类
 '''
 import enum
-import os.path as path
+import os.path as os_path
 from os import remove as os_remove
+from os import sep
 import warnings
 import json
+from collections import deque
 
 from pandas import to_datetime
 from numpy import dtype as np_dtype
 
-from database.const import DataClassification, DataValueCategory, DataFormatCategory, ENCODING
+from database.const import (DataClassification, DataValueCategory, DataFormatCategory,
+                            ENCODING, CONFIG_PATH, REL_PATH_SEP)
 from database.hdf5Engine.dbcore import HDF5Engine
 from database.jsonEngine.dbcore import JSONEngine
+from database.jsonEngine.const import SUFFIX as JSON_SUFFIX
+from qrtutils import parse_config
 
 # ----------------------------------------------------------------------------------------------
 # 函数
@@ -284,10 +289,45 @@ class Database(object):
     Parameter
     ---------
     db_path: string
-        数据的存储路径
+        数据的存储路径，以系统分隔符进行分割，分割后的最后一个名称被确定为数据库名称
+        在设置数据库名称时，不要出现重名，即数据库的路径不同，但是名称相同的现象，这种行为会导致数据库管理的混乱
     '''
     def __init__(self, db_path):
         self._main_path = db_path
+        self._data_tree_root = None
+        self._db_name = self._main_path.split(sep)[-1]
+        if not self._check_duplicate_db():
+            raise ValueError('Database({}) already exists!'.format(self._db_name))
+
+    def _check_duplicate_db(self):
+        '''
+        检查是否有数据库出现重名现象，如果没有，则再检查该数据库是否注册，若没有则直接注册
+        仅在数据库对象初始化时检查
+        存储文件的格式为{db_name: main_path}
+
+        Parameter
+        ---------
+        result: boolean
+            True表示没有重复，False表示重复
+        '''
+        metadata_path = parse_config(CONFIG_PATH)['database_metadata_path']
+        metadata_path = os_path.join(metadata_path, '$metadata.json')
+        if not os_path.exists(metadata_path):   # 存储所有数据库信息的文件不存在，则创建，然后存储
+            metadata = {self._db_name: self._main_path}
+            with open(metadata_path, 'w', encoding=ENCODING) as f:
+                json.dump(metadata, f)
+            return False
+        with open(metadata_path, 'r', encoding=ENCODING) as f:
+            metadata = json.load(f)
+        if self._db_name not in metadata:   # 当前数据库未注册
+            metadata[self._db_name] = self._main_path
+            with open(metadata_path, 'w', encoding=ENCODING) as f:
+                json.dump(metadata, f)
+        else:
+            if metadata[self._db_name] != self._main_path:
+                return False
+            return True
+
 
     def query(self, rel_path, store_fmt, start_time=None, end_time=None):
         '''
@@ -400,6 +440,7 @@ class Database(object):
     def find_data(self, name):
         '''
         查找给定数据或者数据集合名下的所有数据信息
+        内部查询采用BFS算法
 
         Parameter
         ---------
@@ -411,22 +452,61 @@ class Database(object):
         out: list
             元素为字典形式，格式为{'rel_path': rel_path, 'store_fmt': store_fmt}
         '''
-        pass
+        if self._data_tree_root is None:
+            self._load_meta()
+        node = self._find(name, self._data_tree_root, self._precisely_match)
+        if node is None:    # 未查找到相关数据记录，直接返回None
+            return None
+        out = []
+        queue = deque()
+        queue.append(node)
+        while len(queue) > 0:
+            current_node = queue.pop()
+            if current_node.is_leaf:    # 当前节点为叶子结点
+                tmp_data = {'rel_path': current_node.rel_path, 'store_fmt': store_fmt}
+                out.append(tmp_data)
+            else:
+                for child in current_node.children:
+                    queue.append(child)
+        return out
+
+    def _get_metadata_filename(self):
+        '''
+        解析数据库的主路径，获取存储的元数据的名称，目前假设主路径(无论是文件型数据引擎还是商用数据库型数据引擎)
+        主路径都的基本形式都是xxxx/(sys_sep)xxxx/xxxx，内部实现中都是以最后一级名称作为元数据文件的名称
+
+        Return
+        ------
+        fn: string
+        '''
+        metadata_path = parse_config(CONFIG_PATH)['database_metadata_path']
+        return os_path.join(metadata_path, self._db_name+JSON_SUFFIX)
+
 
     def _load_meta(self):
         '''
-        加载该数据库的元数据
+        加载该数据库的元数据，转化为数据文件树，若无法找到元数据文件，则直接建立根节点
         '''
-        pass
+        metadata_path = self._get_metadata_filename()
+        try:
+            with open(metadata_path, 'r', encoding=ENCODING):
+                meta_data = json.load(f)
+            self._data_tree_root = DataNode.init_from_meta(meta_data)
+        except FileNotFoundError:
+            self._data_tree_root = DataNode(self._db_name)
 
-    def _find(self, name, match_func):
+
+    def _find(self, name, node, match_func):
         '''
-        具体实现数据或者数据集合名查找的函数
+        具体实现数据或者数据集合名查找的函数，要求数据库中没有重复的数据(集合)名
+        采用BFS算法遍历查找
 
         Parameter
         ---------
         name: string
             数据或者数据集合的名称
+        node: DataNode
+            查找的起始节点
         match_func: callable
             判断两个名字是否相匹配的函数，格式签名为match_func(name, node_name)->boolean
 
@@ -435,10 +515,28 @@ class Database(object):
         node: DataNode
             查找到的数据节点，若未找到，返回None
         '''
-        passs
+        target_names = name.split(REL_PATH_SEP)
+        first_name = target_names[0]
+
+        queue = deque()
+        queue.append(node)
+        found_node = None
+
+        while len(queue) > 0:
+            current_node = queue.pop()
+            if match_func(first_name, current_node.node_name):  # 找到匹配的节点
+                found_node = current_node
+                break
+            else:
+                for child in current_node.children:
+                    queue.append(child)
+        if found_node is not None and len(target_names) > 1:
+            return self._find(REL_PATH_SEP.join(target_names[1:]), found_node, match_func)
+        else:
+            return found_node
 
     @staticmethod
-    def precisely_match(name, node_name):
+    def _precisely_match(name, node_name):
         '''
         精确查找函数，即只有两个字符串相等才行
 
@@ -451,11 +549,16 @@ class Database(object):
         ------
         result: boolean
         '''
-        pass
+        return name == node_name
 
-    def _updat_meta(self):
+    def _update_meta(self, rel_path):
         '''
         依据操作更新数据文件树，并且将更新后的结构写入到元数据中
+
+        Parameter
+        ---------
+        rel_path: string
+            相对路径
         '''
         pass
 
@@ -608,4 +711,11 @@ class DataNode(object):
     @property
     def is_leaf(self):
         return len(self._children) == 0
+
+    @property
+    def rel_path(self):
+        if self._parent is None:    # 根节点
+            return self._node_name
+        else:
+            return self._parent.rel_path + REL_PATH_SEP + self._node_name
 
