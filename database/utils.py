@@ -18,7 +18,7 @@ from qrtconst import REL_PATH_HEADER
 def submodule_initialization(db_name, path, submod_depth=1):
     '''
     对子模块根据配置进行初始化设置
-    
+
     Parameter
     ---------
     db_name: string
@@ -30,7 +30,7 @@ def submodule_initialization(db_name, path, submod_depth=1):
         子模块在模块文件夹的深度(在获取主模块文件夹路径时使用)
         例如: 主模块文件夹为c:/main_module，子模块文件夹为c:/main_module/sub_module
         则此时submod_depth=1，以此类推
-    
+
     Return
     ------
     db_config: dict
@@ -53,30 +53,30 @@ def submodule_initialization(db_name, path, submod_depth=1):
         if log_path.startswith(REL_PATH_HEADER):
             log_path = qrtutils.relpath2abs(path, log_path)
     db_config['log']['log_path'] = log_path
-        
+
     return db_config
 
 def set_logger(log_config):
     '''
     在子模块初始化时将对应的模块设置应用到系统中
-    
+
     Parameter
     ---------
     log_config: dict
         日志配置
-    
+
     Return
     ------
     logger_name: string
-        logger的名称
+        logger的名称，若没有启用日志，则返回None
     '''
-    if not log_config['enable_log']:
-        return None
+#     if not log_config['enable_log']:
+#         return None
     logger = logging.getLogger(log_config['name'])
     if logger.hasHandlers():    # 每个日志对象只有一个处理函数
         return logger.name
     logger.setLevel(getattr(logging, log_config['log_level']))
-    formatter = logging.Formatter(log_config['format'], 
+    formatter = logging.Formatter(log_config['format'],
                                   log_config['date_format'])
     if log_config['log_to_file']:
         handler = logging.FileHandler(log_config['log_path'])
@@ -86,6 +86,19 @@ def set_logger(log_config):
         handler.setFormatter(formatter)
     logger.addHandler(handler)
     return logger.name
+
+def set_db_logger():
+    '''
+    设置主数据库的日志
+
+    Return
+    ------
+    logger_name: string
+        logger的名称，若没有启用日志，则返回None
+    '''
+    logger_config = qrtutils.parse_config(CONFIG_PATH)['log']
+    logger_config['name'] = MODULE_NAME
+    return set_logger(logger_config)
 
 class DBEngine(object, metaclass=abc.ABCMeta):
     '''
@@ -103,7 +116,7 @@ class DBEngine(object, metaclass=abc.ABCMeta):
         使用数据引擎从数据文件或者数据库中获取数据
         '''
         pass
-    
+
     @classmethod
     @abc.abstractmethod
     def insert(cls, *args, **kwargs):
@@ -111,7 +124,7 @@ class DBEngine(object, metaclass=abc.ABCMeta):
         通过数据引擎将数据插入到数据文件或者数据库中，返回布尔值显示是否插入成功
         '''
         pass
-    
+
     @classmethod
     @abc.abstractmethod
     def remove_data(cls, params):
@@ -119,7 +132,7 @@ class DBEngine(object, metaclass=abc.ABCMeta):
         将给定的数据删除
         '''
         pass
-    
+
     @classmethod
     @abc.abstractmethod
     def move_to(cls, src_params, dest_params):
@@ -134,4 +147,4 @@ class DBEngine(object, metaclass=abc.ABCMeta):
         解析数据的绝对路径
         '''
         pass
-    
+

@@ -63,7 +63,8 @@
         }
     },
     "log": {
-        // whether enable the database module log
+        // whether enable the database module log, this setting does not work, it's just used to 
+        // be consistent with data engine log setting
         "enable_log": true,
         // log is save to file, otherwise log will be printed
         "log_to_file": true,
