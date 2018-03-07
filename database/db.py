@@ -439,13 +439,13 @@ class Database(object):
 
     def find_data(self, name):
         '''
-        查找给定数据或者数据集合名下的所有数据信息
+        查找给定名称的数据
         内部查询采用BFS算法
 
         Parameter
         ---------
         name: string
-            数据或者数据集合的名称
+            数据的名称
 
         Return
         ------
@@ -454,21 +454,45 @@ class Database(object):
         '''
         if self._data_tree_root is None:
             self._load_meta()
-        node = self._find(name, self._data_tree_root, self._precisely_match)
-        if node is None:    # 未查找到相关数据记录，直接返回None
-            return None
-        out = []
-        queue = deque()
-        queue.append(node)
-        while len(queue) > 0:
-            current_node = queue.pop()
-            if current_node.is_leaf:    # 当前节点为叶子结点
-                tmp_data = {'rel_path': current_node.rel_path, 'store_fmt': store_fmt}
-                out.append(tmp_data)
-            else:
-                for child in current_node.children:
-                    queue.append(child)
+        nodes = self._find(name, self._data_tree_root, self._precisely_match, True)
+        out = [{'rel_path': n.rel_path, 'store_fmt': n.store_fmt}
+                for n in nodes]
         return out
+
+    def find_collection(self, name):
+        '''
+        查找给定名称的数据集合，内部查询采用BFS算法
+
+        Parameter
+        ---------
+        name: string
+            数据集名称
+
+        Return
+        ------
+        out: dict
+            结果的格式为{collection_rel_path: [{'rel_path': rel_path, 'store_fmt': store_fmt}]}
+        '''
+        if self._data_tree_root is None:
+            self._load_meta()
+        nodes = self._find(name, self._data_tree_root, self._precisely_match, False)
+
+        def get_leaf_nodes(node):
+            queue = deque()
+            queue.append(node)
+            result = []
+            while len(queue) > 0:
+                current_node = queue.pop()
+                if current_node.is_leaf:
+                    result.append({'rel_path': current_node.rel_path, 'store_fmt': current_node.store_fmt})
+                else:
+                    for child in current_node.children:
+                        queue.append(child)
+            return result
+
+        out = {n.rel_path: get_leaf_nodes(n) for n in nodes}
+        return out
+
 
     def _get_metadata_filename(self):
         '''
@@ -480,6 +504,8 @@ class Database(object):
         fn: string
         '''
         metadata_path = parse_config(CONFIG_PATH)['database_metadata_path']
+        if metadata_path.startswith('~'):   # 特殊用户路径标识符
+            metadata_path = os_path.expanduser(metadata_path)
         return os_path.join(metadata_path, self._db_name+JSON_SUFFIX)
 
 
@@ -496,9 +522,9 @@ class Database(object):
             self._data_tree_root = DataNode(self._db_name)
 
 
-    def _find(self, name, node, match_func):
+    def _find(self, name, node, match_func, leaf_node):
         '''
-        具体实现数据或者数据集合名查找的函数，要求数据库中没有重复的数据(集合)名
+        具体实现数据或者数据集合名查找的函数
         采用BFS算法遍历查找
 
         Parameter
@@ -509,31 +535,30 @@ class Database(object):
             查找的起始节点
         match_func: callable
             判断两个名字是否相匹配的函数，格式签名为match_func(name, node_name)->boolean
+        leaf_node: boolean
+            True表示查找叶子结点
 
         Return
         ------
-        node: DataNode
-            查找到的数据节点，若未找到，返回None
+        result: list
+            DataNode列表，若未查找到，则为空列表
         '''
-        target_names = name.split(REL_PATH_SEP)
-        first_name = target_names[0]
-
-        queue = deque()
-        queue.append(node)
-        found_node = None
-
-        while len(queue) > 0:
-            current_node = queue.pop()
-            if match_func(first_name, current_node.node_name):  # 找到匹配的节点
-                found_node = current_node
-                break
-            else:
-                for child in current_node.children:
-                    queue.append(child)
-        if found_node is not None and len(target_names) > 1:
-            return self._find(REL_PATH_SEP.join(target_names[1:]), found_node, match_func)
+        result = []
+        if not node.is_leaf:
+            if not leaf_node:   # 查找中间节点
+                if match_func(name, node.node_name):
+                    result.append(node)
+                    return result
+            for child in node.children:
+                tmp_res = self._find(name, child, match_func, leaf_node)
+                result += tmp_res
+            return result
         else:
-            return found_node
+            if leaf_node:
+                if match_func(name, node.node_name):
+                    result.append(node)
+            return result
+
 
     @staticmethod
     def _precisely_match(name, node_name):
