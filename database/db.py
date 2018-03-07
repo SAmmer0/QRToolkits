@@ -15,6 +15,7 @@ from os import sep
 import warnings
 import json
 from collections import deque
+import logging
 
 from pandas import to_datetime
 from numpy import dtype as np_dtype
@@ -25,6 +26,11 @@ from database.hdf5Engine.dbcore import HDF5Engine
 from database.jsonEngine.dbcore import JSONEngine
 from database.jsonEngine.const import SUFFIX as JSON_SUFFIX
 from qrtutils import parse_config
+from database.utils import set_db_logger
+# ----------------------------------------------------------------------------------------------
+# 全局预处理
+# 设置日志
+logger = logging.getLogger(set_db_logger())
 
 # ----------------------------------------------------------------------------------------------
 # 函数
@@ -298,6 +304,7 @@ class Database(object):
         self._db_name = self._main_path.split(sep)[-1]
         if not self._check_duplicate_db():
             raise ValueError('Database({}) already exists!'.format(self._db_name))
+        self._load_meta()
 
     def _check_duplicate_db(self):
         '''
@@ -316,7 +323,7 @@ class Database(object):
             metadata = {self._db_name: self._main_path}
             with open(metadata_path, 'w', encoding=ENCODING) as f:
                 json.dump(metadata, f)
-            return False
+            return True
         with open(metadata_path, 'r', encoding=ENCODING) as f:
             metadata = json.load(f)
         if self._db_name not in metadata:   # 当前数据库未注册
@@ -326,7 +333,7 @@ class Database(object):
         else:
             if metadata[self._db_name] != self._main_path:
                 return False
-            return True
+        return True
 
 
     def query(self, rel_path, store_fmt, start_time=None, end_time=None):
@@ -390,6 +397,13 @@ class Database(object):
                                                         'dtype': dtype})
         engine = params.get_engine()
         issuccess = engine.insert(data, params)
+        if issuccess:   # 数据成功插入，修改检查元数据是否需要修改，并采取相应操作
+            if self._data_tree_root.has_offspring(rel_path) is None:
+                self._data_tree_root.add_offspring(rel_path, store_fmt)
+                self._dump_meta()
+        else:
+            logger.warn('Inserting data failed!(db={db_name}, rel_path={rel_path})'.format(db_name=self._db_name,
+                                                                                           rel_path=rel_path))
         return issuccess
 
     def remove_data(self, rel_path, store_fmt):
@@ -411,6 +425,15 @@ class Database(object):
                                                         'store_fmt': store_fmt})
         engine = params.get_engine()
         issuccess = engine.remove_data(params)
+        if issuccess:
+            node = self._data_tree_root.has_offspring(rel_path)
+            if node is None:
+                raise ValueError('Node does not exist!')
+            node.parent.delete_child(node.node_name)
+            self._dump_meta()
+        else:
+            logger.warn('Removing data failed!(db={db_name}, rel_path={rel_path})'.format(db_name=self._db_name,
+                                                                                          rel_path=rel_path))
         return issuccess
 
 
@@ -435,6 +458,24 @@ class Database(object):
                                                              'store_fmt': store_fmt})
         engine = src_params.get_engine()
         issuccess = engine.move_to(src_params, dest_params)
+        if issuccess:
+            # 更新元数据
+            node = self._data_tree_root.has_offspring(source_rel_path)
+            if node is None:
+                raise ValueError('Node does not exist!(rel_path=\"{}\"'.format(source_rel_path))
+            node.parent.delete_child(node.node_name)
+            rel_path_split = dest_rel_path.split(REL_PATH_SEP)
+            node.change_nodename(rel_path_split[-1])
+            new_parent_path = REL_PATH_SEP.join(rel_path_split[:-1])
+            new_parent_node = self._data_tree_root.has_offspring(new_parent_path)
+            if new_parent_node is None:
+                self._data_tree_root.add_offspring(new_parent_path)
+                new_parent_node = self._data_tree_root.has_offspring(new_parent_path)
+            new_parent_node.add_child(node)
+            self._dump_meta()
+        else:
+            logger.warn('Moving data failed!(db={db_name}, rel_path={rel_path})'.format(db_name=self._db_name,
+                                                                                        rel_path=rel_path))
         return issuccess
 
     def find_data(self, name):
@@ -452,8 +493,6 @@ class Database(object):
         out: list
             元素为字典形式，格式为{'rel_path': rel_path, 'store_fmt': store_fmt}
         '''
-        if self._data_tree_root is None:
-            self._load_meta()
         nodes = self._find(name, self._data_tree_root, self._precisely_match, True)
         out = [{'rel_path': n.rel_path, 'store_fmt': n.store_fmt}
                 for n in nodes]
@@ -473,8 +512,6 @@ class Database(object):
         out: dict
             结果的格式为{collection_rel_path: [{'rel_path': rel_path, 'store_fmt': store_fmt}]}
         '''
-        if self._data_tree_root is None:
-            self._load_meta()
         nodes = self._find(name, self._data_tree_root, self._precisely_match, False)
 
         def get_leaf_nodes(node):
@@ -504,8 +541,6 @@ class Database(object):
         fn: string
         '''
         metadata_path = parse_config(CONFIG_PATH)['database_metadata_path']
-        if metadata_path.startswith('~'):   # 特殊用户路径标识符
-            metadata_path = os_path.expanduser(metadata_path)
         return os_path.join(metadata_path, self._db_name+JSON_SUFFIX)
 
 
@@ -576,16 +611,14 @@ class Database(object):
         '''
         return name == node_name
 
-    def _update_meta(self, rel_path):
+    def _dump_meta(self):
         '''
-        依据操作更新数据文件树，并且将更新后的结构写入到元数据中
-
-        Parameter
-        ---------
-        rel_path: string
-            相对路径
+        将更新后的结构写入到元数据中，仅在每次发生元数据更新后调用
         '''
-        pass
+        metadata = self._data_tree_root.to_dict()
+        metadata_path = self._get_metadata_filename()
+        with open(metadata_path, 'w', encoding=ENCODING) as f:
+            json.dump(metadata, f)
 
 
 class DataNode(object):
@@ -650,26 +683,31 @@ class DataNode(object):
         ---------
         child: DataNode
         '''
+        if self.has_child(child):
+            raise ValueError('Current node({}) tries to overlap a child node!'.format(self._node_name))
         child._parent = self
         self._children[child.node_name] = child
 
-    def delete_child(self, child):
+    def delete_child(self, child_name):
         '''
         将给定名称的(直接连接的)节点从该节点的子节点中删除，同时也将子节点的母节点重置为None
 
         Parameter
         ---------
-        child: string
+        child_name: string
             子节点的节点名称，即node_name
 
         Return
         ------
         result: boolean
         '''
-        if not self.has_child(child):
-            warnings.warn("Delete a child which does not exist!", RuntimeWarning)
+        if not self.has_child(child_name):
+            logger.warn("Current node({cn}) tries to delete an unexisting child({cl})!".format(cn=self._node_name,
+                                                                                               cl=child_name))
             return False
+        child = self._children[child_name]
         del self._children[child]
+        child._parent = None
 
     def has_child(self, child):
         '''
@@ -716,6 +754,81 @@ class DataNode(object):
                 children_list.append(child.to_dict())
             out['children'] = children_list
             return out
+
+    def has_offspring(self, rel_path):
+        '''
+        判断是否具有某个相对路径确定的后代节点
+
+        Parameter
+        ---------
+        rel_path: string
+            以点分割的相对路径，例如data1.data2.data3
+
+        Return
+        ------
+        node: DataNode
+            如果找到了该路径下的节点，则返回该节点，反之，返回None
+        '''
+        offsprings = rel_path.split(REL_PATH_SEP)
+        child = self._children.get(offsprings[0], None)
+        if child is None:   # 没有该后代
+            return None
+        if len(offsprings) == 1:    # 最后一个查询节点
+            return child
+        else:
+            return child.has_offspring(REL_PATH_SEP.join(offsprings[1:]))
+
+    def add_offspring(self, rel_path, store_fmt=None):
+        '''
+        依据给定的相对路径递归地向数据树中添加后代
+
+        Parameter
+        ---------
+        rel_path: string
+            以点分割的相对路径，例如data1.data2.data3
+        store_fmt: StoreFormat, default None
+            非None表示该相对路径是叶子节点，仅在最后的叶子结点上添加store_fmt数据
+
+        Return
+        ------
+        node: DataNode
+            添加后的节点对象
+
+        Notes
+        -----
+        该函数并不判断是否存在给定相对路径是否存在(性能要求)，因此，在每次使用该方法添加后代前，需要自行
+        调用has_offspring来判断该相对路径的后代是否存在，否则如果发生覆盖会引发ValueError
+        '''
+        offsprings = rel_path.split(REL_PATH_SEP)
+        child = self._children.get(offsprings[0], None)
+        if child is None:   # 当前节点不存在
+            if len(offsprings) == 1:    # 表示已经到了最终的节点
+                child = DataNode(offsprings[0], store_fmt)
+            else:
+                child = DataNode(offsprings[0])
+                child.add_offspring(REL_PATH_SEP.join(offsprings[1:]), store_fmt)
+            self.add_child(child)
+        else:
+            if len(offsprings) > 1:
+                child.add_offspring(REL_PATH_SEP.join(offsprings[1:]), store_fmt)
+            else:
+                raise ValueError('Current node({}) tries to overlap an existing node!'.format(self._node_name))
+
+    def change_nodename(self, new_name):
+        '''
+        改变节点的名字，对应修改母节点中的相关信息
+
+        Parameter
+        ---------
+        new_name: string
+        '''
+        if new_name == self._node_name:  # 名称相同，则不变
+            return
+        parent = self._parent
+        if parent is not None:
+            parent.delete_child(self._node_name)
+            self._node_name = new_name
+            parent.add_child(self)
 
     @property
     def node_name(self):
