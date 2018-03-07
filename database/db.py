@@ -530,6 +530,23 @@ class Database(object):
         out = {n.rel_path: get_leaf_nodes(n) for n in nodes}
         return out
 
+    def print_collections(self, name=None):
+        '''
+        查找给定的数据集，并答应数据集下所包含的所有数据的组织结构
+
+        Parameter
+        ---------
+        name: string, default None
+            数据集名称，None表示打印整个文件树
+        '''
+        if name is None:
+            tobe_printed = [self._data_tree_root]
+        else:
+            tobe_printed = self._find(name, self._data_tree_root, self._precisely_match, False)
+        for root in tobe_printed:
+            root.print_node('')
+            print('\n')
+
 
     def _get_metadata_filename(self):
         '''
@@ -830,13 +847,27 @@ class DataNode(object):
             self._node_name = new_name
             parent.add_child(self)
 
+    def print_node(self, indention):
+        '''
+        按照DFS算法顺序递归打印该节点及所有子节点
+
+        Parameter
+        ---------
+        indention: string
+            上一级的缩进
+        '''
+        this_level_indention = indention + '|####'
+        print(this_level_indention + ' ' + self._node_name)
+        for child in self.children:
+            child.print_node(this_level_indention)
+
     @property
     def node_name(self):
         return self._node_name
 
     @property
     def children(self):
-        return self._children
+        return self._children.items()
 
     @property
     def parent(self):
