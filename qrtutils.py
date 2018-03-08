@@ -7,7 +7,7 @@ Created on Thu Jan 11 15:45:24 2018
 辅助工具模块
 """
 import json
-from os.path import join
+from os.path import join, expanduser
 from os import sep
 from copy import deepcopy
 import re
@@ -56,6 +56,8 @@ def trans_config_sep(path):
     '''
     if sep != '/':
         path = path.replace('/', sep)
+    if path.startswith('~'):
+        path = expanduser(path)
     return path
 
 

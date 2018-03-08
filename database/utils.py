@@ -12,7 +12,7 @@ from sys import stdout
 import abc
 
 import qrtutils
-from database.const import CONFIG_PATH, MODULE_NAME
+from database.const import CONFIG_PATH, MODULE_NAME, MODULE_PATH
 from qrtconst import REL_PATH_HEADER
 
 def submodule_initialization(db_name, path, submod_depth=1):
@@ -98,6 +98,10 @@ def set_db_logger():
     '''
     logger_config = qrtutils.parse_config(CONFIG_PATH)['log']
     logger_config['name'] = MODULE_NAME
+    # 相对路径转绝对路径
+    path = logger_config['log_path']
+    if path.startswith(REL_PATH_HEADER):
+        logger_config['log_path'].replace(REL_PATH_HEADER, MODULE_PATH)
     return set_logger(logger_config)
 
 class DBEngine(object, metaclass=abc.ABCMeta):
