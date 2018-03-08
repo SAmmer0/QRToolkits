@@ -19,8 +19,9 @@ db = Database(db_path)
 
 num_data = query('CLOSE', (start_time, end_time))
 char_data = query('ZX_IND', (start_time, end_time))
+third_data = query('BETA', (start_time, end_time))
 
 print(db.insert(num_data, 'num_test', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL), 'float64'))
 print(db.insert(char_data, 'char_test', (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.PANEL)))
-
+print(db.insert(third_data, 'factor.beta', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL), 'float64'))
 

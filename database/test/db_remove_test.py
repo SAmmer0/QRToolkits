@@ -6,6 +6,9 @@ Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/2/27
 """
+import os
+import shutil
+
 from numpy import all as np_all
 from numpy import isclose as np_isclose
 
@@ -16,6 +19,10 @@ from fmanager import query
 db_path = r'C:\Users\c\Desktop\test\db_test'
 start_time = '2017-01-01'
 end_time = '2018-02-01'
+
+if os.path.exists(db_path):
+    shutil.rmtree(db_path)
+    shutil.rmtree(r'C:\Users\c\Documents\DatabaseMetadata')
 
 db = Database(db_path)
 

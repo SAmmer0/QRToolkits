@@ -994,8 +994,11 @@ class HDF5Engine(DBEngine):
             raise ValueError('Cannot move to an existing position!')
         src_obj = cls(src_params)
         try:
+            if not exists(dirname(dest_obj._params.absolute_path)):
+                makedirs(dirname(dest_obj._params.absolute_path))
             move(src_obj._params.absolute_path, dest_obj._params.absolute_path)
-        except Exception:
+        except Exception as e:
+            logger.exception(e)
             return False
         return True
 

@@ -20,6 +20,9 @@ if CONFIG_PATH.startswith(REL_PATH_HEADER):
 # 相对路径分隔符
 REL_PATH_SEP = '.'
 
+# 模块路径
+MODULE_PATH = dirname(__file__)
+
 # 设置模块名称，主要用于日志记录中
 MODULE_NAME = 'qrt_database'
 

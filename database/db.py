@@ -11,7 +11,7 @@ ParamsParser: 通用参数类
 import enum
 import os.path as os_path
 from os import remove as os_remove
-from os import sep
+from os import sep, makedirs
 import warnings
 import json
 from collections import deque
@@ -320,6 +320,8 @@ class Database(object):
         metadata_path = parse_config(CONFIG_PATH)['database_metadata_path']
         metadata_path = os_path.join(metadata_path, '$metadata.json')
         if not os_path.exists(metadata_path):   # 存储所有数据库信息的文件不存在，则创建，然后存储
+            if not os_path.exists(os_path.dirname(metadata_path)):
+                makedirs(os_path.dirname(metadata_path))
             metadata = {self._db_name: self._main_path}
             with open(metadata_path, 'w', encoding=ENCODING) as f:
                 json.dump(metadata, f)
@@ -399,7 +401,7 @@ class Database(object):
         issuccess = engine.insert(data, params)
         if issuccess:   # 数据成功插入，修改检查元数据是否需要修改，并采取相应操作
             if self._data_tree_root.has_offspring(rel_path) is None:
-                self._data_tree_root.add_offspring(rel_path, store_fmt)
+                self._data_tree_root.add_offspring(rel_path, params.store_fmt)
                 self._dump_meta()
         else:
             logger.warn('Inserting data failed!(db={db_name}, rel_path={rel_path})'.format(db_name=self._db_name,
@@ -475,7 +477,7 @@ class Database(object):
             self._dump_meta()
         else:
             logger.warn('Moving data failed!(db={db_name}, rel_path={rel_path})'.format(db_name=self._db_name,
-                                                                                        rel_path=rel_path))
+                                                                                        rel_path=source_rel_path))
         return issuccess
 
     def find_data(self, name):
@@ -567,7 +569,7 @@ class Database(object):
         '''
         metadata_path = self._get_metadata_filename()
         try:
-            with open(metadata_path, 'r', encoding=ENCODING):
+            with open(metadata_path, 'r', encoding=ENCODING) as f:
                 meta_data = json.load(f)
             self._data_tree_root = DataNode.init_from_meta(meta_data)
         except FileNotFoundError:
@@ -723,7 +725,7 @@ class DataNode(object):
                                                                                                cl=child_name))
             return False
         child = self._children[child_name]
-        del self._children[child]
+        del self._children[child_name]
         child._parent = None
 
     def has_child(self, child):
@@ -867,7 +869,7 @@ class DataNode(object):
 
     @property
     def children(self):
-        return self._children.items()
+        return self._children.values()
 
     @property
     def parent(self):
@@ -879,7 +881,7 @@ class DataNode(object):
 
     @property
     def is_leaf(self):
-        return len(self._children) == 0
+        return len(self._children) == 0 and self._parent != None    # 避免仅有一个根节点
 
     @property
     def rel_path(self):
