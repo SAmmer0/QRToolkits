@@ -35,7 +35,7 @@ logger = logging.getLogger(set_db_logger())
 
 # ----------------------------------------------------------------------------------------------
 # 函数
-def __strs2StoreFormat(t):
+def strs2StoreFormat(t):
     '''
     将字符串元组解析成为StoreFormat
     主要是为了避免日后对StoreFormat的格式进行拓展导致需要修改的地方太多
@@ -53,9 +53,8 @@ def __strs2StoreFormat(t):
         raise NotImplementedError
     fmt = []
     formater = [DataClassification, DataValueCategory, DataFormatCategory]
-    max_length = len(formater) if len(formater) > len(t) else len(t)
-    for idx in range(max_length):
-        fmt.append(formater[idx][t[idx]])
+    for fmter, desc in zip(formater, t):
+        fmt.append(fmter[desc])
     return StoreFormat.from_iterable(fmt)
 
 
@@ -698,7 +697,7 @@ class DataNode(object):
                 obj.add_child(child_obj)
             return obj
         else:   # 叶子节点
-            obj = cls(meta_data['node_name'], __strs2StoreFormat(meta_data['store_fmt']))
+            obj = cls(meta_data['node_name'], strs2StoreFormat(meta_data['store_fmt']))
             return obj
 
 
