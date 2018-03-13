@@ -5,17 +5,53 @@ Author:  Hao Li
 Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/3/8
-
-在测试前至少需要运行一次db_insert_test.py
 """
+from shutil import rmtree
+import os.path as os_path
 from pprint import pprint
 
+import fmanager
+from database.const import DataClassification, DataFormatCategory, DataValueCategory
 from database.db import Database
 
+test_factors = [{'name': 'ZX_IND',
+                 'store format': (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.PANEL),
+                 'dtype': None,
+                 'rel_path': 'ind.zx'},
+                {'name': 'CLOSE',
+                 'store format': (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL),
+                 'dtype': 'float64',
+                 'rel_path': 'quote.close'},
+                {'name': 'ADJ_CLOSE',
+                 'store format': (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL),
+                 'dtype': 'float64',
+                 'rel_path': 'quote.adj_close'},
+                {'name': 'BETA',
+                 'store format': (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL),
+                 'dtype': 'float64',
+                 'rel_path': 'basicfactor.beta'}]
+start_time = '2014-01-01'
+end_time = '2018-03-01'
 db_path = r'C:\Users\c\Desktop\test\db_test'
 
-db = Database(db_path)
+if os_path.exists(db_path):
+    rmtree(db_path)
+    rmtree(r'C:\Users\c\Documents\DatabaseMetadata')
 
-pprint(db.find_collection('factor'))
+db = Database(db_path)
+for factor in test_factors:
+    factor_data = fmanager.query(factor['name'], (start_time, end_time))
+    result = db.insert(factor_data, factor['rel_path'], factor['store format'], factor['dtype'])
+    print(result)
+
+db.print_collections()
 pprint(db.find_data('beta'))
-pprint(db.find_data('num_test'))
+print(db.find_collection('quote'))
+
+db.remove_data('ind.zx', test_factors[0]['store format'])
+
+db.print_collections()
+
+db.move_to('basicfactor.beta', 'quote.beta', test_factors[3]['store format'])
+
+db.print_collections()

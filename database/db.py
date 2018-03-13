@@ -3,10 +3,10 @@
 主数据库，用于管理和调用其他的数据库引擎
 
 包含以下几个功能：
-DBEngine: 数据库引擎抽象基类
-Database: 主数据库
+Database: 主数据库类
 StoreFormat: 数据存储类型
 ParamsParser: 通用参数类
+DataNode: 数据文件结构树类
 '''
 import enum
 import os.path as os_path
@@ -32,9 +32,10 @@ from database.utils import set_db_logger
 # 设置日志
 logger = logging.getLogger(set_db_logger())
 
+
 # ----------------------------------------------------------------------------------------------
 # 函数
-def strs2StoreFormat(t):
+def __strs2StoreFormat(t):
     '''
     将字符串元组解析成为StoreFormat
     主要是为了避免日后对StoreFormat的格式进行拓展导致需要修改的地方太多
@@ -291,6 +292,9 @@ class Database(object):
     insert: 将数据存储到本地
     remove_data: 将给定路径的数据删除
     move_to: 将给定的数据移动到其他位置
+    find_collection: 查找给定名称的数据集
+    find_collection: 查找给定名称的数据
+    print_collections: 打印当前数据库下数据组织结构
 
     Parameter
     ---------
@@ -404,8 +408,8 @@ class Database(object):
                 self._data_tree_root.add_offspring(rel_path, params.store_fmt)
                 self._dump_meta()
         else:
-            logger.warn('Inserting data failed!(db={db_name}, rel_path={rel_path})'.format(db_name=self._db_name,
-                                                                                           rel_path=rel_path))
+            logger.warn('[Operation=Database.insert, Info=\"Inserting data failed!(db={db_name}, rel_path={rel_path})\"]'.
+                        format(db_name=self._db_name, rel_path=rel_path))
         return issuccess
 
     def remove_data(self, rel_path, store_fmt):
@@ -434,8 +438,8 @@ class Database(object):
             node.parent.delete_child(node.node_name)
             self._dump_meta()
         else:
-            logger.warn('Removing data failed!(db={db_name}, rel_path={rel_path})'.format(db_name=self._db_name,
-                                                                                          rel_path=rel_path))
+            logger.warn('[Operation=Database.remove_data, Info=\"Removing data failed!(db={db_name}, rel_path={rel_path})\"]'.
+                        format(db_name=self._db_name,rel_path=rel_path))
         return issuccess
 
 
@@ -458,6 +462,10 @@ class Database(object):
                                                             'store_fmt': store_fmt})
         dest_params = ParamsParser.from_dict(self._main_path, {'rel_path': dest_rel_path,
                                                              'store_fmt': store_fmt})
+        if source_rel_path == dest_rel_path:
+            logger.warn('[Operation=Database.move_to, Info=\"source_rel_path({}) and dest_rel_path are the same!\"]'.
+                        format(source_rel_path))
+            return False
         engine = src_params.get_engine()
         issuccess = engine.move_to(src_params, dest_params)
         if issuccess:
@@ -476,8 +484,8 @@ class Database(object):
             new_parent_node.add_child(node)
             self._dump_meta()
         else:
-            logger.warn('Moving data failed!(db={db_name}, rel_path={rel_path})'.format(db_name=self._db_name,
-                                                                                        rel_path=source_rel_path))
+            logger.warn('[Operation=Database.move_to, Info=\"Moving data failed!(db={db_name}, rel_path={rel_path})\"]'.
+                        format(db_name=self._db_name, rel_path=source_rel_path))
         return issuccess
 
     def find_data(self, name):
@@ -690,7 +698,7 @@ class DataNode(object):
                 obj.add_child(child_obj)
             return obj
         else:   # 叶子节点
-            obj = cls(meta_data['node_name'], strs2StoreFormat(meta_data['store_fmt']))
+            obj = cls(meta_data['node_name'], __strs2StoreFormat(meta_data['store_fmt']))
             return obj
 
 
@@ -721,12 +729,14 @@ class DataNode(object):
         result: boolean
         '''
         if not self.has_child(child_name):
-            logger.warn("Current node({cn}) tries to delete an unexisting child({cl})!".format(cn=self._node_name,
-                                                                                               cl=child_name))
+            logger.warn("[Operation=DataNode.delete_child, Info=\"Current node({cn}) tries to delete an unexisting child({cl})!\"]".
+                        format(cn=self._node_name, cl=child_name))
             return False
         child = self._children[child_name]
         del self._children[child_name]
         child._parent = None
+        if len(self._children) == 0 and not self.is_root:    # 表明当前中间节点没有任何子节点
+            self._parent.delete_child(self._node_name)
 
     def has_child(self, child):
         '''
@@ -844,10 +854,12 @@ class DataNode(object):
         if new_name == self._node_name:  # 名称相同，则不变
             return
         parent = self._parent
-        if parent is not None:
+        if not self.is_root:
             parent.delete_child(self._node_name)
             self._node_name = new_name
             parent.add_child(self)
+        else:
+            self._node_name = new_name
 
     def print_node(self, indention):
         '''
@@ -881,12 +893,16 @@ class DataNode(object):
 
     @property
     def is_leaf(self):
-        return len(self._children) == 0 and self._parent != None    # 避免仅有一个根节点
+        return self._store_fmt is not None
+
+    @property
+    def is_root(self):
+        return self._parent is None
 
     @property
     def rel_path(self):
-        if self._parent is None:    # 根节点
-            return self._node_name
+        if self.is_root:    # 根节点为数据库名，没有相对路径
+            return ''
         else:
             return self._parent.rel_path + REL_PATH_SEP + self._node_name
 
