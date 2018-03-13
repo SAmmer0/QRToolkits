@@ -62,6 +62,23 @@
             "date_format": "%Y-%m-%d %H:%M:%S"
         }
     },
+    "pickledb":{
+        "log":{
+            // whether the database use an independent log file
+            "enable_log": true,
+            // log is save to file, otherwise log will be printed
+            "log_to_file": true,
+            // log path where the log file is saved, starting with "./" means relative path
+            // Warning: in configuration file separator is "/"
+            "log_path": "./jsondb_log.log",
+            // log level
+            "log_level": "DEBUG",
+            // log format
+            "format": "%(asctime)s %(levelname)s %(filename)s-%(lineno)s: %(message)s",
+            // date format
+            "date_format": "%Y-%m-%d %H:%M:%S"
+        }
+    },
     "log": {
         // whether enable the database module log, this setting does not work, it's just used to 
         // be consistent with data engine log setting

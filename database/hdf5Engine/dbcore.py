@@ -972,6 +972,7 @@ class HDF5Engine(DBEngine):
             obj = cls(params)
             remove(obj._params.absolute_path)
         except Exception as e:
+            logger.exception(e)
             return False
         return True
 
