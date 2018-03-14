@@ -118,7 +118,6 @@ class TimeIndex(DataIndex):
         obj: TimeIndex
             经过数据集数据初始化后的TimeIndex对象
         '''
-        logger.debug("TimeIndex.init_from_dataset")
         obj = cls()
         dates = date_dset[...]
         obj._data = pd.Index(pd.to_datetime([s.decode('utf-8') for s in dates]))
@@ -142,7 +141,6 @@ class TimeIndex(DataIndex):
         obj: TimeIndex
             经过pd.Index对象初始化后的TimeIndex对象
         '''
-        logger.debug("TimeIndex.init_from_index")
         obj = cls()
         obj._data = pd_index
         obj._length = len(pd_index)
@@ -165,7 +163,6 @@ class TimeIndex(DataIndex):
         ------
         dates: np.array
         '''
-        logger.debug("TimeIndex.to_bytes")
         if not dtype.lower().startswith('s'):
             raise InvalidInputTypeError("Wrong dtype for date string, given {}".format(dtype))
         out = self._data.strftime(date_fmt).astype(dtype)
@@ -215,7 +212,6 @@ class SymbolIndex(DataIndex):
         ------
         obj: SymbolIndex
         '''
-        logger.debug("SymbolIndex.init_from_dataset")
         obj = cls()
         data = symbol_dset[...]
         obj._data = pd.Index([s.decode('utf-8') for s in data])
@@ -236,7 +232,6 @@ class SymbolIndex(DataIndex):
         ------
         obj: SymbolIndex
         '''
-        logger.debug("SymbolIndex.init_from_index")
         obj = cls()
         obj._data = pd_index
         obj._length = len(pd_index)
@@ -255,7 +250,6 @@ class SymbolIndex(DataIndex):
         ------
         dates: np.array
         '''
-        logger.debug("SymbolIndex.to_bytes")
         if not dtype.lower().startswith('s'):
             raise InvalidInputTypeError("Wrong dtype for date string, given {}".format(dtype))
         out = np.array(self._data, dtype=dtype)
@@ -311,7 +305,6 @@ class Data(object):
         obj: Data
             通过pd.DataFrame初始化后的对象
         '''
-        logger.debug("Data.init_from_pd")
         obj = cls()
         if isinstance(pd_data, pd.DataFrame):
             obj._data_category = DataFormatCategory.PANEL
@@ -372,7 +365,6 @@ class Data(object):
         symbol_index: SymbolIndex
             代码数据，如果原始数据为时间序列数据则该返回值为None
         '''
-        logger.debug("Data.decompose2dataset")
         data = self._data.values
         date_index = TimeIndex.init_from_index(self._data.index)
         if self._data_category == DataFormatCategory.PANEL:
@@ -465,7 +457,6 @@ class Data(object):
         dtype: np.dtype like
             数据类型标识
         '''
-        logger.debug("Data.as_type")
         self._data = self._data.astype(dtype)
 
     @property
@@ -561,7 +552,8 @@ class Reader(object):
         try:
             tmp_properties = self.properties
             if tmp_properties['filled status'] == FilledStatus.EMPTY:
-                logger.debug("Query an empty data file(file_path = {}).".format(self._params.absolute_path))
+                logger.warn("[Operation=Reader.query_all, Info=\"Query an empty data file(file_path = {}).\"]".
+                            format(self._params.absolute_path))
                 return None
             store = h5py.File(self._params.absolute_path, 'r')
             # 加载日期数据

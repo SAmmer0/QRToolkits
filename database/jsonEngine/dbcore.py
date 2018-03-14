@@ -255,8 +255,7 @@ class DataWrapper(object):
             raise ValueError('Incompatible data category, {dc} required, but {pdc} is provided'.
                              format(dc=self.data_category, pdc=other.data_category))
         if not (other.start_time <= self.start_time and other.end_time <= self.end_time):
-            import warnings
-            warnings.warn('Improper time order', RuntimeWarning)
+            logger.warn('[Operation=DataWrapper.update, Info=\"Improper time order\"]')
             return
         self.drop_before_date(other.end_time)
         if self.data_category == DataFormatCategory.PANEL:
