@@ -44,6 +44,9 @@ for factor in test_factors:
     result = db.insert(factor_data, factor['rel_path'], factor['store format'], factor['dtype'])
     print(result)
 
+unstruct_data = list(range(1000))
+print(db.insert(unstruct_data, 'unstruct_data.test', (DataClassification.UNSTRUCTURED, )))
+
 db.print_collections()
 pprint(db.find_data('beta'))
 print(db.find_collection('quote'))

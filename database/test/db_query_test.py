@@ -21,9 +21,11 @@ db = Database(db_path)
 
 num_data = query('CLOSE', (start_time, end_time))
 char_data = query('ZX_IND', (start_time, end_time))
+unstruct_data = list(range(1000))
 
 db.insert(num_data, 'num_test', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL), 'float64')
 db.insert(char_data, 'char_test', (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.PANEL))
+db.insert(unstruct_data, 'unstruct_data.test', (DataClassification.UNSTRUCTURED, ))
 
 query_start = '2017-05-01'
 query_end = '2017-12-06'
@@ -37,3 +39,5 @@ queryed_char_data = db.query('char_test', (DataClassification.STRUCTURED, DataVa
                              query_start, query_end)
 old_char_data = query('ZX_IND', (query_start, query_end))
 print(np_all(queryed_char_data==old_char_data))
+
+print(db.query('unstruct_data.test', (DataClassification.UNSTRUCTURED, )))

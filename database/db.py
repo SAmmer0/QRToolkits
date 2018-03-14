@@ -24,6 +24,7 @@ from database.const import (DataClassification, DataValueCategory, DataFormatCat
                             ENCODING, CONFIG_PATH, REL_PATH_SEP)
 from database.hdf5Engine.dbcore import HDF5Engine
 from database.jsonEngine.dbcore import JSONEngine
+from database.pickleEngine.dbcore import PickleEngine
 from database.jsonEngine.const import SUFFIX as JSON_SUFFIX
 from qrtutils import parse_config
 from database.utils import set_db_logger
@@ -187,7 +188,8 @@ class ParamsParser(object):
         self._engine_map_rule = {(DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL): HDF5Engine,
                                  (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES): HDF5Engine,
                                  (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.PANEL): JSONEngine,
-                                 (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.TIME_SERIES): JSONEngine}
+                                 (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.TIME_SERIES): JSONEngine,
+                                 (DataClassification.UNSTRUCTURED, ): PickleEngine}
         # 参数组合校验字典，键为(start_time is None, end_time is None)，值为对应的存储类型
         self._validation_rule = {(False, False): StoreFormat.from_iterable((DataClassification.STRUCTURED, )),
                                  (True, False): StoreFormat.from_iterable((DataClassification.STRUCTURED,)),

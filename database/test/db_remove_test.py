@@ -28,9 +28,12 @@ db = Database(db_path)
 
 num_data = query('CLOSE', (start_time, end_time))
 char_data = query('ZX_IND', (start_time, end_time))
+unstruct_data = list(range(1000))
 
 db.insert(num_data, 'num_test', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL), 'float64')
 db.insert(char_data, 'char_test', (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.PANEL))
+db.insert(unstruct_data, 'unstruct_data.test', (DataClassification.UNSTRUCTURED, ))
 
 print(db.remove_data('num_test', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL)))
 print(db.remove_data('char_test', (DataClassification.STRUCTURED, DataValueCategory.CHAR, DataFormatCategory.PANEL)))
+print(db.remove_data('unstruct_data.test', (DataClassification.UNSTRUCTURED, )))

@@ -61,7 +61,7 @@ class PickleEngine(DBEngine):
             path = db_obj._params.absolute_path
             if not exists(dirname(path)):
                 makedirs(dirname(path))
-            with open(path, 'w', encoding=ENCODING) as f:
+            with open(path, 'wb') as f:
                 pickle.dump(data, f, protocol=PICKLE_PROTOCOL)
         except Exception as e:
             logger.exception(e)
@@ -82,7 +82,7 @@ class PickleEngine(DBEngine):
         out: object
         '''
         db_obj = cls(params)
-        with open(db_obj._params.absolute_path, 'r', encoding=ENCODING) as f:
+        with open(db_obj._params.absolute_path, 'rb') as f:
             data = pickle.load(f)
         return data
 
