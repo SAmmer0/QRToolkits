@@ -294,7 +294,7 @@ class Database(object):
     remove_data: 将给定路径的数据删除
     move_to: 将给定的数据移动到其他位置
     find_collection: 查找给定名称的数据集
-    find_collection: 查找给定名称的数据
+    find_data: 查找给定名称的数据
     print_collections: 打印当前数据库下数据组织结构
 
     Parameter
@@ -362,6 +362,12 @@ class Database(object):
         Return
         ------
         out: pandas.Series, pandas.DataFrame or object
+
+        Example
+        -------
+        >>> db = Database(r'some_path')
+        >>> db.query('data1.data11.data112', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL), '2017-01-01', '2018-01-01')
+        >>> db.query('data2.data21', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES), '2017-01-01', '2018-01-01')
         '''
         params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
                                                         'store_fmt': store_fmt,
@@ -398,6 +404,12 @@ class Database(object):
         ------
         issuccess: boolean
             是否成功插入数据，True表示成功
+
+        Example
+        -------
+        >>> db = Database(r'some_path')
+        >>> db.insert(data1, 'data1.data11.data112', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.PANEL), 'float64')
+        >>> db.insert(data2, 'data2.data21', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES), 'int32')
         '''
         params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
                                                         'store_fmt': store_fmt,
@@ -427,6 +439,11 @@ class Database(object):
         Return
         ------
         issuccess: boolean
+
+        Example
+        -------
+        >>> db = Database(r'some_path')
+        >>> db.remove_data('data1.data11.data112', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES))
         '''
         params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
                                                         'store_fmt': store_fmt})
@@ -458,6 +475,11 @@ class Database(object):
         Return
         ------
         issuccess: boolean
+
+        Example
+        -------
+        >>> db = Database(r'some_path')
+        >>> db.move_to('data1.data11.data112', 'data1.data12.data121', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES))
         '''
         src_params = ParamsParser.from_dict(self._main_path, {'rel_path': source_rel_path,
                                                             'store_fmt': store_fmt})
@@ -503,6 +525,11 @@ class Database(object):
         ------
         out: list
             元素为字典形式，格式为{'rel_path': rel_path, 'store_fmt': store_fmt}
+
+        Example
+        -------
+        >>> db = Database(r'some_path')
+        >>> db.find_data('data1.data11.data112')
         '''
         nodes = self._find(name, self._data_tree_root, self._precisely_match, True)
         out = [{'rel_path': n.rel_path, 'store_fmt': n.store_fmt}
@@ -522,6 +549,11 @@ class Database(object):
         ------
         out: dict
             结果的格式为{collection_rel_path: [{'rel_path': rel_path, 'store_fmt': store_fmt}]}
+
+        Example
+        -------
+        >>> db = Database(r'some_path')
+        >>> db.find_collection('data1.data11')
         '''
         nodes = self._find(name, self._data_tree_root, self._precisely_match, False)
 
@@ -549,6 +581,11 @@ class Database(object):
         ---------
         name: string, default None
             数据集名称，None表示打印整个文件树
+
+        Example
+        -------
+        >>> db = Database(r'some_path')
+        >>> db.print_collections()
         '''
         if name is None:
             tobe_printed = [self._data_tree_root]
