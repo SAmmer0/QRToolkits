@@ -19,10 +19,6 @@ class TargetSign(enum.Enum):
     LAST = enum.auto()
     FIRST = enum.auto()
 
-# 推移方向
-class Direction(enum.Enum):
-    FUTURE = enum.auto()
-    PAST = enum.auto()
 
 # 加载配置文件
 CONFIG = parse_config(join(dirname(__file__), 'config.json'))
