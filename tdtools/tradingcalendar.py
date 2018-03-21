@@ -98,9 +98,9 @@ class TradingCalendar(object):
         end_time: datetime like
             终止时间
         freq: string or Frequency(Enum)
-            日期分类频率
+            日期分类频率，[WEEKLY, MONTHLY, YEARLY]
         target: string or TargetSign(Enum)
-            目标标记
+            目标标记，[FIRST, LAST]
 
         Return
         ------
@@ -152,7 +152,7 @@ class TradingCalendar(object):
                              format(include_type))
         return out
 
-    def count(self, start_time, end_time, include_type):
+    def count(self, start_time, end_time, include_type='both'):
         '''
         获取给定时间区间内的交易日的数量
         Parameter
@@ -250,9 +250,9 @@ class TradingCalendar(object):
         date: datetime like
             判断的日期
         freq: string or Frequency(Enum)
-            日期分类频率
+            日期分类频率，[WEEKLY, MONTHLY, YEARLY]
         target: string or TargetSign(Enum)
-            目标标记
+            目标标记，[FIRST, LAST]
 
         Return
         ------

@@ -25,3 +25,6 @@ CONFIG = parse_config(join(dirname(__file__), 'config.json'))
 
 # 设置日志
 LOGGER_NAME = set_logger(CONFIG['log'])
+
+# 股票市场开市收市时间设置
+STOCK_TRADING_PERIOD = (('09:30', '11:30'), ('13:00', '15:00'))
