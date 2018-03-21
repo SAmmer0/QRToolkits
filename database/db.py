@@ -352,10 +352,11 @@ class Database(object):
         rel_path: string
             该数据在数据库中的相对路径，路径格式为db.sub_dir.sub_dir.sub_data
         store_fmt: StoreFormat or iterable
-            数据存储格式分类
+            数据存储格式分类，详情见模块文档
         start_time: datetime like
             数据开始时间(可选)，若请求的是面板数据的某个时间点的横截面数据，该参数不能为None，
             而end_time参数需要为None
+            非结构化数据不需要设置该参数以及end_time参数
         end_time: datetime like
             数据结束时间(可选)
 
@@ -397,7 +398,7 @@ class Database(object):
         rel_path: string
             数据的相对路径
         store_fmt: StoreFormat or iterable
-            数据存储格式分类
+            数据存储格式分类，详情见模块文档
         dtype: numpy.dtype like, default None
             数据存储类型，目前仅数值型数据需要提供该参数
         Return
@@ -434,7 +435,7 @@ class Database(object):
         rel_path: string
             数据的相对路径
         store_fmt: StoreFormat
-            数据存储方式分类
+            数据存储方式分类，详情见模块文档
 
         Return
         ------
@@ -470,7 +471,7 @@ class Database(object):
         dest_rel_path: string
             目标存储位置的相对路径
         store_fmt: StoreFormat
-            数据存储方式分类
+            数据存储方式分类，详情见模块文档
 
         Return
         ------
