@@ -12,7 +12,7 @@ from os.path import join, dirname
 
 from qrtutils import parse_config
 from qrtconst import Frequency
-from timeutils.utils import set_logger
+from tdtools.utils import set_logger
 
 # 周期标记
 class TargetSign(enum.Enum):

@@ -8,8 +8,8 @@ Created: 2018/3/21
 
 负责所有日历的管理工作，包括添加新的日历实例、对日历的数据进行存取和更新
 """
-from timeutils.const import CONFIG, STOCK_TRADING_PERIOD
-from timeutils.tradingcalendar import TradingCalendar
+from tdtools.const import CONFIG, STOCK_TRADING_PERIOD
+from tdtools.tradingcalendar import TradingCalendar
 from database import Database, DataClassification
 
 # --------------------------------------------------------------------------------------------------

@@ -11,7 +11,7 @@ from itertools import groupby
 
 from pandas import to_datetime, Timedelta
 
-from timeutils.const import CONFIG, LOGGER_NAME, Frequency, TargetSign
+from tdtools.const import CONFIG, LOGGER_NAME, Frequency, TargetSign
 from database import Database
 
 # --------------------------------------------------------------------------------------------------
