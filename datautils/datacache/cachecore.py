@@ -6,10 +6,15 @@ Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/3/22
 """
+import logging
 
 from pandas import to_datetime, concat
 
-from datautils.datacache.const import CacheStatus
+from datautils.datacache.const import CacheStatus, LOGGER_NAME
+
+# --------------------------------------------------------------------------------------------------
+# 预处理
+logger = logging.getLogger(LOGGER_NAME)
 
 # --------------------------------------------------------------------------------------------------
 # 类
@@ -96,9 +101,12 @@ class DataView(object):
         if left_date is None and right_date is None:
             raise ValueError('Parameter \"left_date\" and \"right_date\" cannot be None at the same time!')
         if update_direction == CacheStatus.ENOUGH:
-            return    # 不恰当操作，计入日志
+            logger.warning('[Operation=DataView._update_cache, Info=\"Updating cache when CacheStatus ==  ENOUGH\"]')
+            return
         if not any(self._extendable):    # 两边数据均不可再扩展
-            return    # 计入日志
+            logger.warning('[Operation=DataView._update_cache, Info=\"Cache cannot be extended!(start_time={st}, end_time={et})\"]'.
+                           format(st=self._cache_start, et=self._cache_end))
+            return
         if left_date is not None:
             left_date = self._calendar.shift_tradingdays(left_date, -self._offset)
         if right_date is not None:
