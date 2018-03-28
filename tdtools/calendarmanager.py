@@ -8,7 +8,7 @@ Created: 2018/3/21
 
 负责所有日历的管理工作，包括添加新的日历实例、对日历的数据进行存取和更新
 """
-from tdtools.const import CONFIG, STOCK_TRADING_PERIOD
+from tdtools.const import CONFIG, TRADING_TIME
 from tdtools.tradingcalendar import TradingCalendar
 from database import Database, DataClassification
 
@@ -34,24 +34,21 @@ def update_data(data, rel_path):
     '''
     return calendar_db.insert(data, rel_path, (DataClassification.UNSTRUCTURED, ))
 
-def create_calendar(rel_path, trading_time):
+def get_calendar(calendar_rel_path):
     '''
-    用于创建各个交易所或者市场的交易日历实例，要求在创建前日历的数据已经被存储在指定的相对路径下
+    获取给定相对路径的日历，若没有对应的数据(日历数据或者交易时间数据)则报错
+    若需要添加日历数据，调用update_data，若需要添加交易时间数据，需要手动添加到tdtools.const的TRADING_TIME中
     Parameter
     ---------
-    rel_path: string
-        交易日历存储的相对路径
-    trading_time: tuple
-        交易时间段设置
+    calendar_rel_path: string
+        日历的相对路径
 
     Return
     ------
-    out: TradingCalendar
+    calendar: TradingCalendar
     '''
-    data = calendar_db.query(rel_path, (DataClassification.UNSTRUCTURED, ))
-    obj = TradingCalendar(data, trading_time)
+    if calendar_rel_path not in calendar_db.list_alldata() or calendar_rel_path not in TRADING_TIME:
+        raise ValueError('data(path={}) cannot be found!'.format(calendar_rel_path))
+    data = calendar_db.query(calendar_rel_path, (DataClassification.UNSTRUCTURED, ))
+    obj = TradingCalendar(data, TRADING_TIME[calendar_rel_path])
     return obj
-
-# --------------------------------------------------------------------------------------------------
-# 交易日历实例
-sse_calendar = create_calendar('stock.sse', STOCK_TRADING_PERIOD)

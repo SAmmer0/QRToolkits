@@ -8,4 +8,4 @@ Created: 2018/3/16
 
 交易时间处理工具类
 """
-from tdtools.calendarmanager import sse_calendar, update_data
+from tdtools.calendarmanager import update_data, get_calendar
