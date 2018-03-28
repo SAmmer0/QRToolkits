@@ -101,7 +101,7 @@ def set_db_logger():
     # 相对路径转绝对路径
     path = logger_config['log_path']
     if path.startswith(REL_PATH_HEADER):
-        logger_config['log_path'] = path.replace(REL_PATH_HEADER, MODULE_PATH)
+        logger_config['log_path'] = qrtutils.relpath2abs(MODULE_PATH, path)
     return set_logger(logger_config)
 
 class DBEngine(object, metaclass=abc.ABCMeta):

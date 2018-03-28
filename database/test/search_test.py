@@ -58,3 +58,4 @@ db.print_collections()
 db.move_to('basicfactor.beta', 'quote.beta', test_factors[3]['store format'])
 
 db.print_collections()
+pprint(db.list_alldata())
