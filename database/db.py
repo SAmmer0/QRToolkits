@@ -625,8 +625,7 @@ class Database(object):
         ------
         fn: string
         '''
-        metadata_path = parse_config(CONFIG_PATH)['database_metadata_path']
-        return os_path.join(metadata_path, self._db_name+JSON_SUFFIX)
+        return os_path.join(self._main_path, self._db_name+JSON_SUFFIX)
 
 
     def _load_meta(self):
