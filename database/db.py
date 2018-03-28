@@ -33,7 +33,6 @@ from database.utils import set_db_logger
 # 设置日志
 logger = logging.getLogger(set_db_logger())
 
-
 # ----------------------------------------------------------------------------------------------
 # 函数
 def strs2StoreFormat(t):
@@ -512,6 +511,25 @@ class Database(object):
                         format(db_name=self._db_name, rel_path=source_rel_path))
         return issuccess
 
+    def list_alldata(self):
+        '''
+        返回所有数据的相对路径
+
+        Return
+        ------
+        out: list
+            元素为每个数据的相对路径
+        '''
+        out = []
+        def get_all(node):
+            if node.is_leaf:
+                out.append(self._trans_node_relpath(node.rel_path))
+            else:
+                for child in node.children:
+                    get_all(child)
+        get_all(self._data_tree_root)
+        return out
+
     def find_data(self, name):
         '''
         查找给定名称的数据
@@ -533,7 +551,7 @@ class Database(object):
         >>> db.find_data('data1.data11.data112')
         '''
         nodes = self._find(name, self._data_tree_root, self._precisely_match, True)
-        out = [{'rel_path': n.rel_path, 'store_fmt': n.store_fmt}
+        out = [{'rel_path': self._trans_node_relpath(n.rel_path), 'store_fmt': n.store_fmt}
                 for n in nodes]
         return out
 
@@ -565,13 +583,14 @@ class Database(object):
             while len(queue) > 0:
                 current_node = queue.pop()
                 if current_node.is_leaf:
-                    result.append({'rel_path': current_node.rel_path, 'store_fmt': current_node.store_fmt})
+                    result.append({'rel_path': self._trans_node_relpath(current_node.rel_path),
+                                   'store_fmt': current_node.store_fmt})
                 else:
                     for child in current_node.children:
                         queue.append(child)
             return result
 
-        out = {n.rel_path: get_leaf_nodes(n) for n in nodes}
+        out = {self._trans_node_relpath(n.rel_path): get_leaf_nodes(n) for n in nodes}
         return out
 
     def print_collections(self, name=None):
@@ -685,6 +704,21 @@ class Database(object):
         metadata_path = self._get_metadata_filename()
         with open(metadata_path, 'w', encoding=ENCODING) as f:
             json.dump(metadata, f)
+
+    @staticmethod
+    def _trans_node_relpath(node_rel_path):
+        '''
+        将数据节点的相对路径进行转换，去除开头的相对路径分隔符
+        Parameter
+        ---------
+        node_rel_path: string
+            节点相对路径
+
+        Return
+        ------
+        out: string
+        '''
+        return node_rel_path[1:]
 
 
 class DataNode(object):
