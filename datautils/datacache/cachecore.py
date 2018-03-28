@@ -7,7 +7,7 @@ Github: https://github.com/SAmmer0
 Created: 2018/3/22
 """
 
-from pandas import to_datetime
+from pandas import to_datetime, concat
 
 from datautils.datacache.const import CacheStatus
 
@@ -31,7 +31,7 @@ class DataView(object):
         当请求的数据超出当前缓存时，需要加载新的数据，为避免频繁加载，可以预先加载超过请求的数据，该参数表示的为
         超过的交易日的数量
     '''
-    def __init__(self, func, calendar, update_method, preload_num):
+    def __init__(self, func, calendar, update_method='stepbystep', preload_num=100):
         self._func = func
         self._calendar = calendar
         if update_method not in ['overlap', 'stepbystep']:
@@ -100,9 +100,9 @@ class DataView(object):
         if not any(self._extendable):    # 两边数据均不可再扩展
             return    # 计入日志
         if left_date is not None:
-            left_date = self._calendar.latest_tradingday(left_date, 'FUTURE')
+            left_date = self._calendar.shift_tradingdays(left_date, -self._offset)
         if right_date is not None:
-            right_date = self._calendar.latest_tradingday(right_date, 'PAST')
+            right_date = self._calendar.shift_tradingdays(right_date, self._offset)
 
         if update_direction == CacheStatus.BOTH:
             self._update_both(left_date, right_date)
@@ -122,7 +122,7 @@ class DataView(object):
         right_date: datetime
             右目标交易日
         '''
-        if self._update_method == 'overlap':
+        if self._data_cache is None or self._update_method == 'overlap':
             left_date = left_date if self._extendable[0] else self._cache_start
             right_date = right_date if self._extendable[1] else self._cache_end
             self._data_cache = self._func(left_date, right_date).sort_index(ascending=True)
@@ -166,7 +166,7 @@ class DataView(object):
             self._data_cache = data.sort_index(ascending=True)
         else:
             data = data.reindex(data.index.difference(self._data_cache.index), axis=0)
-            self._data_cache = pd.concate([data, self._data_cache], axis=0).sort_index(ascending=True)
+            self._data_cache = concat([data, self._data_cache], axis=0).sort_index(ascending=True)
         # 更新数据时间和扩展状态
         if update_direction == CacheStatus.PAST:
             self._cache_start = self._data_cache.index[0]

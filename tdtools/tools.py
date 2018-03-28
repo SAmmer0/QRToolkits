@@ -33,4 +33,4 @@ def trans_date(*args):
         out = tuple(result)
     return out
 
-__all__ = [trans_date]
+__all__ = ['trans_date']
