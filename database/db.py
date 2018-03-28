@@ -625,7 +625,7 @@ class Database(object):
         ------
         fn: string
         '''
-        return os_path.join(self._main_path, self._db_name+JSON_SUFFIX)
+        return os_path.join(self._main_path, '#metadata'+JSON_SUFFIX)
 
 
     def _load_meta(self):
