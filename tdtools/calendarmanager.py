@@ -15,6 +15,8 @@ from database import Database, DataClassification
 # --------------------------------------------------------------------------------------------------
 # 全局变量设置
 calendar_db = Database(CONFIG['calendar']['calendar_db_path'])
+# 交易日历对象缓存，用于实现单例模式
+calendar_cache = {}
 
 # --------------------------------------------------------------------------------------------------
 # 处理函数
@@ -47,8 +49,12 @@ def get_calendar(calendar_rel_path):
     ------
     calendar: TradingCalendar
     '''
-    if calendar_rel_path not in calendar_db.list_alldata() or calendar_rel_path not in TRADING_TIME:
-        raise ValueError('data(path={}) cannot be found!'.format(calendar_rel_path))
-    data = calendar_db.query(calendar_rel_path, (DataClassification.UNSTRUCTURED, ))
-    obj = TradingCalendar(data, TRADING_TIME[calendar_rel_path])
+    if calendar_rel_path not in calendar_cache:
+        if calendar_rel_path not in calendar_db.list_alldata() or calendar_rel_path not in TRADING_TIME:
+            raise ValueError('data(path={}) cannot be found!'.format(calendar_rel_path))
+        data = calendar_db.query(calendar_rel_path, (DataClassification.UNSTRUCTURED, ))
+        obj = TradingCalendar(data, TRADING_TIME[calendar_rel_path])
+        calendar_cache[calendar_rel_path] = obj
+    else:
+        obj = calendar_cache[calendar_rel_path]
     return obj
