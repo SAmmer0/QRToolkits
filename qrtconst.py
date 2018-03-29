@@ -17,6 +17,9 @@ NaS = 'Not a String'
 # file encoding
 ENCODING = 'utf-8'
 
+# 现金标记代码
+CASH = 'CASH'
+
 # 周期
 
 
