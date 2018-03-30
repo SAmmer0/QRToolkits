@@ -7,6 +7,7 @@ Github: https://github.com/SAmmer0
 Created: 2018/3/29
 """
 import pandas as pd
+import numpy as np
 
 from qrtconst import CASH
 
@@ -147,6 +148,8 @@ class ExposureCalculator(object):
             benchmark = add_cash(benchmark)
         idx = portfolio.index.union(benchmark.index)
         factor_data = self._combine_datas(date).reindex(idx)
+        if np.any(np.any(pd.isnull(factor_data), axis=1)):    # 存在NA数据
+            raise ValueError('NA value contained in the factor data!')    # 应当计入日志，内容包含有哪些因子以及日期
         exceeded_port = portfolio.reindex(idx).fillna(0) - benchmark.reindex(idx).fillna(0)
         exposure = exceeded_port.dot(factor_data)
         return exposure
