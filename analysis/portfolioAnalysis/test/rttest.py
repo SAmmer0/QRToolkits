@@ -13,7 +13,7 @@ from fmanager import generate_getter
 from datatoolkits import add_suffix
 from datautils import DataView
 from tdtools import get_calendar, timeit_wrapper
-from analysis.portfolioAnalysis.analysorcore import ExposureCalculator
+from analysis.portfolioAnalysis.analysorcore import ExposureAnalysor
 
 pos_path = r'E:\工作日志\2018\3月\resources\组合持仓记录.xlsx'
 date = '2018-03-12'
@@ -29,7 +29,7 @@ def generate_dv(factor_name):
 factors = ['BARRA_BETA', 'BARRA_LNCAP', 'BARRA_BTOP', 'BARRA_CMRA', 'BARRA_DASTD', 'BARRA_HSIGMA', 'ZX_IND']
 factor_datas = {fn: generate_dv(fn) for fn in factors}
 
-xcalculator = ExposureCalculator(factor_datas, industry_fn='ZX_IND')
+xcalculator = ExposureAnalysor(factor_datas, industry_fn='ZX_IND')
 # 速度比较慢可能是由于行业数据加载速度慢导致的
 xcal = timeit_wrapper(xcalculator.calculate_exposure)
 tmp = xcal(date, pos_data)

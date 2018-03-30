@@ -11,7 +11,8 @@ import numpy as np
 
 from qrtconst import CASH
 
-class ExposureCalculator(object):
+
+class ExposureAnalysor(object):
     '''
     用于计算因子暴露的类
     Parameter
@@ -23,6 +24,7 @@ class ExposureCalculator(object):
         factor_data中若包含了股票所属行业的数据(行业数据为字符串类型，在使用前需要转换为数值型dummy数据)，
         默认为None表示不包含行业数据
     '''
+
     def __init__(self, factor_data, industry_fn=None):
         self._factor_data = factor_data    # 此处使用的是浅复制，具有一定的风险
         self._industry_fn = industry_fn
@@ -149,7 +151,8 @@ class ExposureCalculator(object):
         idx = portfolio.index.union(benchmark.index)
         factor_data = self._combine_datas(date).reindex(idx)
         if np.any(np.any(pd.isnull(factor_data), axis=1)):    # 存在NA数据
-            raise ValueError('NA value contained in the factor data!')    # 应当计入日志，内容包含有哪些因子以及日期
+            # raise ValueError('NA value contained in the factor data!')    # 应当计入日志，内容包含有哪些因子以及日期
+            pass
         exceeded_port = portfolio.reindex(idx).fillna(0) - benchmark.reindex(idx).fillna(0)
         exposure = exceeded_port.dot(factor_data)
         return exposure
