@@ -8,6 +8,9 @@ Created: 2018/3/28
 
 该模块主要收集一些不容易分类的与时间处理相关的小功能函数
 """
+import time
+from functools import wraps
+
 from pandas import to_datetime
 
 def trans_date(*args):
@@ -33,4 +36,25 @@ def trans_date(*args):
         out = tuple(result)
     return out
 
-__all__ = ['trans_date']
+def timeit_wrapper(func):
+    '''
+    装饰器，用于打印函数运行的时间
+    Parameter
+    ---------
+    func: function(*args, **kwargs)
+
+    Return
+    ------
+    wrapped_func: function(*args, **kwargs)
+        经过包装的函数，自动打印函数运行的时间
+    '''
+    @wraps(func)
+    def inner(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print('{func} running time: {t:.4f}ms.'.format(func=func.__name__, t=(end_time-start_time) * 1000))
+        return result
+    return inner
+
+__all__ = ['trans_date', 'timeit_wrapper']
