@@ -142,11 +142,11 @@ class ExposureCalculator(object):
 
         portfolio = add_cash(portfolio)
         if benchmark is None:
-            benchmark = pd.Series({sn: 0 if sn != CASH else 1 for sn in portfolio})
+            benchmark = pd.Series({sn: 0 if sn != CASH else 1 for sn in portfolio.index})
         else:
             benchmark = add_cash(benchmark)
-        factor_data = self._combine_datas(date)
-        idx = factor_data.index
+        idx = portfolio.index.union(benchmark.index)
+        factor_data = self._combine_datas(date).reindex(idx)
         exceeded_port = portfolio.reindex(idx).fillna(0) - benchmark.reindex(idx).fillna(0)
         exposure = exceeded_port.dot(factor_data)
         return exposure
