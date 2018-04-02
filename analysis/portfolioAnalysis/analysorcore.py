@@ -29,7 +29,7 @@ class ExposureAnalysor(object):
         self._factor_data = factor_data    # 此处使用的是浅复制，具有一定的风险
         self._industry_fn = industry_fn
 
-    def add_factor(self, factor_name, factor_data):
+    def add_factor(self, factor_name, factor_data, is_industry=False):
         '''
         添加新的因子数据
         Parameter
@@ -38,9 +38,15 @@ class ExposureAnalysor(object):
             添加的因子数据的名称，要求不能与已经有的因子数据名称重复，重复会导致报错(ValueError)
         factor_data: object
             因子数据，必须有get_csdata(date)方法，推荐datautils.DataView或者其子类
+        is_industry: boolean
+            标记当前因子是否是行业数据
         '''
         if factor_name in self._factor_data:
             raise ValueError('Duplicate factor name! {} is already contained!'.format(factor_name))
+        if is_industry and self._industry_fn is not None:
+            raise ValueError('Industry data already exist! Please delete old data before adding a new one.')
+        if is_industry:
+            self._industry_fn = factor_name
         self._factor_data[factor_data] = factor_data
 
     def delete_factor(self, factor_name):
@@ -54,6 +60,8 @@ class ExposureAnalysor(object):
         if factor_name not in self._factor_data:
             raise ValueError('Factor data({}) cannot be found!'.format(factor_name))
         del self._factor_data[factor_name]
+        if factor_name == self._industry_fn:
+            self._industry_fn = None
 
     @staticmethod
     def _handle_cash(data):
