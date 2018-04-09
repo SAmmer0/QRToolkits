@@ -1,0 +1,5 @@
+h5py >= 1.8
+qrtconst
+qrtutils
+pandas >= 0.22.0
+numpy >= 1.14.0
