@@ -8,9 +8,13 @@ Created: 2018/4/4
 
 包含SQL数据的基本处理函数
 """
+import pyodbc
 
 import pandas as pd
 
+
+# --------------------------------------------------------------------------------------------------
+# 工具函数
 def transform_data(data, colnames, dtypes=None):
     '''
     将数据库中获取的原始数据转换为常用(Pandas可解析)的数据类型
@@ -99,30 +103,55 @@ def expand_data(data, time_col, period_flag_col, max_hist_num):
         .reset_index(drop=True)
     return out, flag
 
-if __name__ == '__main__':
-    from sysconfiglee import get_database
-    from tdtools.tools import timeit_wrapper
-    jydb = get_database('jydb')
-    sql = '''
-    SELECT S.InfoPublDate, S.EndDate, M.SecuCode, S.NPFromParentCompanyOwners
-    FROM LC_QIncomeStatementNew S, SecuMain M
-    WHERE
-        M.CompanyCode = S.CompanyCode AND
-        M.SecuMarket in (83, 90) AND
-        M.SecuCategory = 1 AND
-        S.BulletinType != 10 AND
-        S.EndDate >= CAST(\'{start_time}\' AS datetime) AND
-        S.InfoPublDate <= CAST(\'{end_time}\' AS datetime) AND
-        S.EndDate >= (SELECT TOP(1) S2.CHANGEDATE
-                      FROM LC_ListStatus S2
-                      WHERE
-                          S2.INNERCODE = M.INNERCODE AND
-                          S2.ChangeType = 1)
-    ORDER BY M.SecuCode ASC, S.InfoPublDate ASC
+# --------------------------------------------------------------------------------------------------
+# 类
+class SQLConnector(object):
     '''
-    fetch_db_data = timeit_wrapper(fetch_db_data)
-    data = fetch_db_data(jydb, sql, ['update_time', 'rpt_date', 'code', 'data'], {'data': 'float64'},
-                         {'start_time': '2016-01-01', 'end_time': '2018-04-01'})
-    expand_data = timeit_wrapper(expand_data)
-    sample_data = data.groupby('code').get_group('000001')
-    res, flag = expand_data(sample_data, 'update_time', 'rpt_date', 3)
+    对pyodbc模块进行包装
+    Parameter
+    ---------
+    database: string
+        数据库名称
+    server: string
+        服务器地址
+    uid: string
+        用户名
+    pwd: string
+        密码
+    driver: string
+        驱动
+    '''
+    def __init__(self, database, server, uid, pwd, driver):
+        self._database = database
+        self._server = server
+        self._uid = uid
+        self._pwd = pwd
+        self._driver = driver
+        self._conn = None
+
+    def fetchall(self, sql, *args, **kwargs):
+        '''
+        从数据库中提取数据
+        Parameter
+        ---------
+        sql: string
+            获取数据的SQL语句
+        args: iterable
+            其他可迭代的SQL参数
+        kwargs: dict
+            其他键值类型的SQL参数
+
+        Return
+        ------
+        out: list
+            元素为pyodbc.Row
+        '''
+        self._conn = pyodbc.connect(DATABASE=self._database, SERVER=self._server, UID=self._uid,
+                                   PWD=self._pwd, DRIVER=self._driver)
+        try:
+            cur = self._conn.cursor()
+            cur.execute(sql, *args, **kwargs)
+            out = cur.fetchall()
+        finally:
+            self._conn.close()
+        return out
