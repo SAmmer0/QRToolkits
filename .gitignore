@@ -104,3 +104,5 @@ CONST_DATAS/
 test_sources/
 *.wpr
 *.wpu
+datasource/sqlserver/jydb/config.json
+datasource/sqlserver/zyyx/config.json

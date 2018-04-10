@@ -9,8 +9,12 @@ Created: 2018/4/4
 包含SQL数据的基本处理函数
 """
 import pyodbc
+import time
+import pdb
 
 import pandas as pd
+
+from tdtools import trans_date
 
 
 # --------------------------------------------------------------------------------------------------
@@ -18,6 +22,7 @@ import pandas as pd
 def transform_data(data, colnames, dtypes=None):
     '''
     将数据库中获取的原始数据转换为常用(Pandas可解析)的数据类型
+
     Parameter
     ---------
     data: list
@@ -44,6 +49,7 @@ def transform_data(data, colnames, dtypes=None):
 def fetch_db_data(db, sql, colnames, dtypes=None, sql_kwargs=None):
     '''
     从数据库中获取数据
+
     Parameter
     ---------
     db: Object
@@ -70,9 +76,10 @@ def fetch_db_data(db, sql, colnames, dtypes=None, sql_kwargs=None):
     return data
 
 
-def expand_data(data, time_col, period_flag_col, max_hist_num):
+def expand_data(data, time_col, period_flag_col):
     '''
     将数据进行扩展，计算每个时间点能够观测到的最新的历史数据
+
     Parameter
     ---------
     data: pandas.DataFrame
@@ -81,8 +88,6 @@ def expand_data(data, time_col, period_flag_col, max_hist_num):
         数据观测时间所在列列名，例如基本面数据的数据更新时间
     period_flag_col: string
         数据对应期数的标记所在列的列名，例如数据对应的报告期
-    max_hist_num: int
-        每个观测时间点保留的最新数据的数量
 
     Return
     ------
@@ -92,15 +97,14 @@ def expand_data(data, time_col, period_flag_col, max_hist_num):
         额外添加一列的列名
     '''
     flag = '__TIME_FLAG__'
-    out = pd.DataFrame()
+    out = []
     for udt in data[time_col].unique():
         tmp_data = data[data[time_col] <= udt]     # 观测日的数据需要包含当天的
         by_rpt = tmp_data.groupby(period_flag_col, as_index=False)
-        tmp_res = by_rpt.apply(lambda x: x.tail(1))
+        tmp_res = by_rpt.tail(1)
         tmp_res[flag] = udt
-        out = out.append(tmp_res)
-    out = out.groupby(flag, as_index=False).apply(lambda x: x.tail(max_hist_num))\
-        .reset_index(drop=True)
+        out.append(tmp_res)
+    out = pd.concat(out, axis=0)
     return out, flag
 
 # --------------------------------------------------------------------------------------------------
@@ -108,6 +112,7 @@ def expand_data(data, time_col, period_flag_col, max_hist_num):
 class SQLConnector(object):
     '''
     对pyodbc模块进行包装
+
     Parameter
     ---------
     database: string
@@ -132,6 +137,7 @@ class SQLConnector(object):
     def fetchall(self, sql, *args, **kwargs):
         '''
         从数据库中提取数据
+
         Parameter
         ---------
         sql: string

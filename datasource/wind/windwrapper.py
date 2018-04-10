@@ -43,6 +43,7 @@ class WindAPI(object):
     def get_wind_tds(self, start_time, end_time):
         '''
         从Wind数据库中获取交易日数据
+
         Parameter
         ---------
         start_time: datetime
