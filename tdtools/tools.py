@@ -13,9 +13,11 @@ from functools import wraps
 
 from pandas import to_datetime
 
+
 def trans_date(*args):
     '''
     对日期进行标准化，转化为pandas.TimeStamp类型，并且将时间重置为0时0分0秒
+
     Parameter
     ---------
     args: iterable
@@ -36,9 +38,11 @@ def trans_date(*args):
         out = tuple(result)
     return out
 
+
 def timeit_wrapper(func):
     '''
     装饰器，用于打印函数运行的时间
+    
     Parameter
     ---------
     func: function(*args, **kwargs)
@@ -53,8 +57,7 @@ def timeit_wrapper(func):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        print('{func} running time: {t:.4f}ms.'.format(func=func.__name__, t=(end_time-start_time) * 1000))
+        print('{func} running time: {t:.4f}ms.'.format(
+            func=func.__name__, t=(end_time - start_time) * 1000))
         return result
     return inner
-
-__all__ = ['trans_date', 'timeit_wrapper']
