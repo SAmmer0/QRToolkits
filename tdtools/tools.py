@@ -10,6 +10,8 @@ Created: 2018/3/28
 """
 import time
 from functools import wraps
+import datetime as dt
+from itertools import cycle
 
 from pandas import to_datetime
 
@@ -42,7 +44,7 @@ def trans_date(*args):
 def timeit_wrapper(func):
     '''
     装饰器，用于打印函数运行的时间
-    
+
     Parameter
     ---------
     func: function(*args, **kwargs)
@@ -61,3 +63,51 @@ def timeit_wrapper(func):
             func=func.__name__, t=(end_time - start_time) * 1000))
         return result
     return inner
+
+
+def get_last_rpd_date(dates, findmax=True):
+    '''
+    计算给定的日期序列中最大(或者最小)的季报或者年报日期
+
+    Parameter
+    ---------
+    dates: iterable
+        元素为datetime获取其子类
+    ascending: boolean
+        True表示查找最大的报告期，False表示查找最小的报告期
+
+    Return
+    ------
+    out: datetime
+    '''
+    rpt_dates = ['03-31', '06-30', '09-30', '12-31']
+    for date in sorted(dates, reverse=findmax):
+        if date.strftime('%m-%d') in rpt_dates:
+            return date
+    else:
+        return None
+
+
+def generate_rpd_series(date, n):
+    '''
+    根据给定的报告期生成连续的(过往的)报告期序列
+
+    Parameter
+    ---------
+    date: datetime or subclass
+        该日期必须为报告期
+    n: int
+        生成的序列长度
+
+    Return
+    ------
+    out: list
+        长度为n的报告期序列，按照降序排列，包含参数date
+    '''
+    rptd = ['12-31', '09-30', '06-30', '03-31']
+    m = int(date.month / 3)
+    od = rptd[4-m:] + rptd[:4-m]
+    out = []
+    for i, d in zip(range(-m, -m+n), cycle(od)):
+        out.append(dt.datetime.strptime(str(date.year-i//4-1)+'-'+d, '%Y-%m-%d'))
+    return out
