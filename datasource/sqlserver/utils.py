@@ -76,7 +76,7 @@ def fetch_db_data(db, sql, colnames, dtypes=None, sql_kwargs=None):
     return data
 
 
-def expand_data(data, time_col, period_flag_col):
+def expand_data(data, time_col, period_flag_col, max_hist_num):
     '''
     将数据进行扩展，计算每个时间点能够观测到的最新的历史数据
 
@@ -88,6 +88,8 @@ def expand_data(data, time_col, period_flag_col):
         数据观测时间所在列列名，例如基本面数据的数据更新时间
     period_flag_col: string
         数据对应期数的标记所在列的列名，例如数据对应的报告期
+    max_hist_num: int
+        每个时间点保留的历史最新数据的最大数量
 
     Return
     ------
@@ -104,7 +106,10 @@ def expand_data(data, time_col, period_flag_col):
         tmp_res = by_rpt.tail(1)
         tmp_res[flag] = udt
         out.append(tmp_res)
-    out = pd.concat(out, axis=0)
+    out = pd.concat(out, axis=0)\
+        .sort_values([flag, period_flag_col], ascending=True)
+    out = out.groupby(flag).tail(max_hist_num)\
+        .reset_index(drop=True)
     return out, flag
 
 # --------------------------------------------------------------------------------------------------

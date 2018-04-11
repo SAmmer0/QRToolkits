@@ -90,7 +90,7 @@ def get_jydb_tds(start_time, end_time, market_type=83):
     return out
 
 
-def process_fundamental_data(data, cols, start_time, end_time, func, **kwargs):
+def process_fundamental_data(data, cols, start_time, end_time, max_hist_num, func, **kwargs):
     '''
     处理从数据库中取出的基本面数据，按照给定的函数计算基本面数据，并将基本面数据映射到交易日中
 
@@ -104,6 +104,8 @@ def process_fundamental_data(data, cols, start_time, end_time, func, **kwargs):
         数据的开始时间
     end_time: datetime like
         数据的结束时间
+    max_hist_num: int
+        每个更新日期保存的历史最新数据的最大数量
     func: function
         格式为function(pandas.DataFrame)-> value，该函数接受的参数为每个股票在每个更新日期
         的最新历史数据，包含cols参数中的列
@@ -121,7 +123,7 @@ def process_fundamental_data(data, cols, start_time, end_time, func, **kwargs):
     tds = get_calendar('stock.sse').get_tradingdays(start_time, end_time)
     def handler_per_symbol(df):
         # 对单只证券进行处理
-        obs_data, obs_flag = expand_data(df, ut_col, rpt_col)
+        obs_data, obs_flag = expand_data(df, ut_col, rpt_col, max_hist_num)
         res = obs_data.groupby(obs_flag).apply(func, **kwargs)
         res = map2td(res, tds).reset_index().rename(columns={obs_flag: 'time', 0: 'data'})
         return res
@@ -132,15 +134,18 @@ def process_fundamental_data(data, cols, start_time, end_time, func, **kwargs):
 if __name__ == '__main__':
     from tdtools import timeit_wrapper
     from datasource.sqlserver.utils import fetch_db_data
-    from fdmutils import cal_season
+    from fdmutils import cal_season, cal_ttm
+    from fmanager import query
+    from datatoolkits import add_suffix
+    import numpy as np
     sql = '''
-    SELECT S.InfoPublDate, S.EndDate, M.SecuCode, S.TotalAssets
-    FROM SecuMain M, LC_BalanceSheetAll S
-    WHERE M.CompanyCode = S.CompanyCode AND
+    SELECT S.InfoPublDate, S.EndDate, M.SecuCode, S.NPFromParentCompanyOwners
+    FROM LC_QIncomeStatementNew S, SecuMain M
+    WHERE
+        M.CompanyCode = S.CompanyCode AND
         M.SecuMarket in (83, 90) AND
         M.SecuCategory = 1 AND
         S.BulletinType != 10 AND
-        S.IfMerged = 1 AND
         S.EndDate >= CAST(\'{start_time}\' AS datetime) AND
         S.InfoPublDate <= CAST(\'{end_time}\' AS datetime) AND
         S.EndDate >= (SELECT TOP(1) S2.CHANGEDATE
@@ -150,12 +155,20 @@ if __name__ == '__main__':
                           S2.ChangeType = 1)
     ORDER BY M.SecuCode ASC, S.InfoPublDate ASC
     '''
-    data_st = '2017-01-01'
+    data_st = '2016-01-01'
     data_et = '2018-04-01'
     start_time = '2018-01-01'
     end_time = '2018-04-01'
     data = fetch_db_data(jydb, sql, ['ut', 'rpt', 'symbol', 'data'], {'data': 'float64'},
                          {'start_time': data_st, 'end_time': data_et})
     process_fundamental_data = timeit_wrapper(process_fundamental_data)
-    func = lambda x: cal_season(x, 'data', 'rpt')
-    res = process_fundamental_data(data, ['symbol', 'data', 'ut', 'rpt'], data_st, data_et, func)
+    func = lambda x: cal_ttm(x, 'data', 'rpt')
+    res = process_fundamental_data(data, ['symbol', 'data', 'ut', 'rpt'], data_st, data_et, 4, func)
+    tmp = res.iloc[-1]
+    tmp.index = [add_suffix(c) for c in tmp.index]
+    db_data = query('NI_TTM', '2018-03-30').iloc[-1]
+    db_data = db_data.reindex(tmp.index)
+    tmp = tmp.fillna(-1000)
+    db_data = db_data.fillna(-1000)
+    print(np.all(np.isclose(tmp, db_data)))
+    xtmp = tmp - db_data
