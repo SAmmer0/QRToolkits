@@ -7,9 +7,9 @@ Github: https://github.com/SAmmer0
 Created: 2018/4/9
 """
 import pandas as pd
+import numpy as np
 
-from tdtools import get_calendar
-from tdtools import trans_date
+from tdtools import get_calendar, trans_date, get_last_rpd_date, generate_rpd_series
 from datasource.sqlserver.utils import transform_data, expand_data
 from datasource.sqlserver.jydb.dbengine import jydb
 
@@ -131,6 +131,81 @@ def process_fundamental_data(data, cols, start_time, end_time, max_hist_num, fun
     out = out.pivot_table('data', index='time', columns=symbol_col)
     return out
 
+def calc_tnm(df, data_col, period_flag_col, nperiod=4):
+    '''
+    计算TTM的变种算法，用于计算最新的n个季度数据的和
+
+    Parameter
+    ---------
+    df: pandas.DataFrame
+        至少包含data_col和period_flag_col两列
+    data_col: string
+        数据所在的列列名
+    period_flag_col: string
+        报告期标记所在的列列名
+    nperiod: int, default 4
+        计算数据加和的期数
+
+    Return
+    ------
+    result: float
+
+    Notes
+    -----
+    nperiod参数应该大于1，可能会出现无法预测的异常，等于1时推荐使用calc_offsetdata
+    '''
+    if len(df) < nperiod:
+        return np.nan
+    last_rpt_date = get_last_rpd_date(df[period_flag_col])
+    if last_rpt_date is None:
+        return np.nan
+    rpts = generate_rpd_series(last_rpt_date, nperiod)
+    df = df.set_index(period_flag_col)
+    return np.sum(df.loc[rpts, data_col])
+
+
+def calc_offsetdata(df, data_col, period_flag_col, offset, multiple):
+    '''
+    提取往前推移给定期数的基本面数据值，例如获取最近财年的数据或者最近季度的数据
+
+    Parameter
+    ---------
+    df: pandas.DataFrame
+        至少包含data_col和period_flag_col两列
+    data_col: string
+        数据所在列的列名
+    period_flag_col: string
+        报告期标记所在列的列名
+    offset: int
+        往前推移的期数，其中1表示往前最近的一期，2表示次前的一期，以此类推
+        例如，当前日期为2018-03-30，数据中报告期依次为[2017-12-31, 2017-09-30, 2017-06-30]，
+        以季度为例，1对应着2017-12-31，2对应着2017-09-30，依次类推
+    multiple: int
+        指查找给定数据的时间跨度，以季度为最基本的单位，当前仅支持[1(季度), 2(半年度), 4(半年度)]。
+
+    Return
+    ------
+    result: float
+    '''
+    if multiple not in [1, 2, 4]:
+        raise ValueError('Improper parameter \"multiple\",'+
+                         ' valids are [1, 2, 4], you provide {}.'.format(multiple))
+    if len(df) < offset:
+        return np.nan
+    rpt_col = df[period_flag_col]
+    last_rpt_date = get_last_rpd_date(rpt_col)
+    if last_rpt_date is None:
+        return np.nan
+    rpts = generate_rpd_series(last_rpt_date, offset*multiple)
+    multiple = 3 * multiple
+    target = [t for t in rpts if t.month % multiple == 0][offset - 1]
+    df = df.set_index(period_flag_col)
+    try:
+        result = df.loc[target, data_col]
+    except KeyError:
+        result = np.nan
+    return result
+
 if __name__ == '__main__':
     from tdtools import timeit_wrapper
     from datasource.sqlserver.utils import fetch_db_data
@@ -157,18 +232,11 @@ if __name__ == '__main__':
     '''
     data_st = '2016-01-01'
     data_et = '2018-04-01'
-    start_time = '2018-01-01'
-    end_time = '2018-04-01'
     data = fetch_db_data(jydb, sql, ['ut', 'rpt', 'symbol', 'data'], {'data': 'float64'},
                          {'start_time': data_st, 'end_time': data_et})
     process_fundamental_data = timeit_wrapper(process_fundamental_data)
-    func = lambda x: cal_ttm(x, 'data', 'rpt')
-    res = process_fundamental_data(data, ['symbol', 'data', 'ut', 'rpt'], data_st, data_et, 4, func)
-    tmp = res.iloc[-1]
-    tmp.index = [add_suffix(c) for c in tmp.index]
-    db_data = query('NI_TTM', '2018-03-30').iloc[-1]
-    db_data = db_data.reindex(tmp.index)
-    tmp = tmp.fillna(-1000)
-    db_data = db_data.fillna(-1000)
-    print(np.all(np.isclose(tmp, db_data)))
-    xtmp = tmp - db_data
+    sample = data.loc[data.symbol == '000001']
+    sample_obs, flag= expand_data(sample, 'ut', 'rpt', 6)
+    sample_data = sample_obs.loc[sample_obs[flag] == sample_obs[flag].iloc[-1]]
+    ttm = calc_tnm(sample_data, 'data', 'rpt')
+    yi = calc_offsetdata(sample_data, 'data', 'rpt', 1, 4)
