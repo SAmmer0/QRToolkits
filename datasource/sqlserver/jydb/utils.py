@@ -160,8 +160,12 @@ def calc_tnm(df, data_col, period_flag_col, nperiod=4):
     if last_rpt_date is None:
         return np.nan
     rpts = generate_rpd_series(last_rpt_date, nperiod)
-    df = df.set_index(period_flag_col)
-    return np.sum(df.loc[rpts, data_col])
+    target_df = df.loc[df[period_flag_col].isin(rpts), data_col]
+    if len(target_df) < nperiod:
+        return np.nan
+    if len(target_df) > nperiod:
+        raise ValueError('Data length exceeds that of required!')
+    return target_df.sum(skipna=False)
 
 
 def calc_offsetdata(df, data_col, period_flag_col, offset, multiple):
@@ -209,7 +213,7 @@ def calc_offsetdata(df, data_col, period_flag_col, offset, multiple):
 if __name__ == '__main__':
     from tdtools import timeit_wrapper
     from datasource.sqlserver.utils import fetch_db_data
-    from fdmutils import cal_season, cal_ttm
+    from fdmutils import cal_season, cal_ttm, cal_yr
     from fmanager import query
     from datatoolkits import add_suffix
     import numpy as np
@@ -239,4 +243,13 @@ if __name__ == '__main__':
     sample_obs, flag= expand_data(sample, 'ut', 'rpt', 6)
     sample_data = sample_obs.loc[sample_obs[flag] == sample_obs[flag].iloc[-1]]
     ttm = calc_tnm(sample_data, 'data', 'rpt')
-    yi = calc_offsetdata(sample_data, 'data', 'rpt', 1, 4)
+    ttm_old = cal_ttm(sample_data, 'data', 'rpt')
+    print("ttm = {ttm}, ttm_old = {ttm_old}".format(ttm=ttm, ttm_old=ttm_old.iloc[0]))
+    for i in range(1, 4):
+        yi = calc_offsetdata(sample_data, 'data', 'rpt', i, 1)
+        yi_old = cal_season(sample_data, 'data', 'rpt', offset=i)
+        print("yi = {yi}, yi_old = {yi_old}".format(yi=yi, yi_old=yi_old.iloc[0]))
+    for i in range(1, 4):
+        yi = calc_offsetdata(sample_data, 'data', 'rpt', i, 4)
+        yi_old = cal_yr(sample_data, 'data', 'rpt', offset=i)
+        print("yi = {yi}, yi_old = {yi_old}".format(yi=yi, yi_old=yi_old.iloc[0]))
