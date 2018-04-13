@@ -8,3 +8,4 @@ Created: 2018/4/4
 
 Wind Python API包装
 """
+from datasource.wind.windwrapper import wind
