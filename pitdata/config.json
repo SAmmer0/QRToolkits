@@ -1,6 +1,8 @@
 {
     // path where saving all data
-    "db_path": "",
+    "db_path": "E:\\ResearchData",
+    // path of description files
+    "data_description_file_path": "",
     "log":{
         // whether enable the database module log, this setting does not work, it's just used to 
         // be consistent with data engine log setting

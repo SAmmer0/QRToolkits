@@ -12,6 +12,7 @@ import pandas as pd
 
 from pitdata.const import CONFIG, DT_MAP
 from database import Database
+from database.const import REL_PATH_SEP
 
 # --------------------------------------------------------------------------------------------------
 # 加载数据库实例，一次性加载避免过多的元数据初始化
@@ -117,16 +118,19 @@ def move_data(src_path, dest_path, datatype):
 
 def list_all_data():
     '''
-    以列表的形式返回当前数据库中包含的所有数据
+    以字典的形式返回当前数据库中包含的所有数据
 
     Return
     ------
-    out: list
-        每个元素为每个数据节点的相对路径
+    out: dict
+        格式为{data_name: {'rel_path': rel_path, 'datatype': datatype}}
     '''
     db_name = op_split(CONFIG['db_path'])[1]
     all_data_node = db.find_collection(db_name)['']
-    out = [n['rel_path'] for n in all_data_node]
+    reverse_map = {DT_MAP[k]['store_fmt']: k for k in DT_MAP}
+    out = {d['rel_path'].split(REL_PATH_SEP)[-1]:
+           {'rel_path': d['rel_path'], 'datatype': reverse_map[d['store_fmt']]}
+           for d in all_data_node}
     return out
 
 def show_db_structure():

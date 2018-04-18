@@ -7,6 +7,7 @@ Github: https://github.com/SAmmer0
 Created: 2018/4/17
 """
 import enum
+from os.path import dirname, join
 
 from database import DataClassification, DataFormatCategory, DataValueCategory
 from qrtutils import parse_config
@@ -31,4 +32,4 @@ DT_MAP = {
 }
 
 # 加载和设置配置
-CONFIG = parse_config('config.json')
+CONFIG = parse_config(join(dirname(__file__), 'config.json'))
