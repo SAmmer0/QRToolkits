@@ -6,13 +6,15 @@ Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/4/17
 """
+from os.path import split as op_split
+
 import pandas as pd
 
 from pitdata.const import CONFIG, DT_MAP
 from database import Database
 
 # --------------------------------------------------------------------------------------------------
-# 加载数据库实例
+# 加载数据库实例，一次性加载避免过多的元数据初始化
 db = Database(CONFIG['db_path'])
 
 # --------------------------------------------------------------------------------------------------
@@ -112,3 +114,23 @@ def move_data(src_path, dest_path, datatype):
     move_param = DT_MAP[datatype]
     result = db.move_to(src_path, dest_path, move_param['store_fmt'])
     return result
+
+def list_all_data():
+    '''
+    以列表的形式返回当前数据库中包含的所有数据
+
+    Return
+    ------
+    out: list
+        每个元素为每个数据节点的相对路径
+    '''
+    db_name = op_split(CONFIG['db_path'])[1]
+    all_data_node = db.find_collection(db_name)['']
+    out = [n['rel_path'] for n in all_data_node]
+    return out
+
+def show_db_structure():
+    '''
+    打印数据库的结构
+    '''
+    db.print_collections()
