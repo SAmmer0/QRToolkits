@@ -63,3 +63,4 @@ class WindAPI(object):
             raise ValueError(out.Data[0][0])
         return sorted(to_datetime(out.Data[0]))
 
+wind = WindAPI()

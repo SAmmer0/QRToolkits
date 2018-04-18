@@ -10,9 +10,9 @@ DataNode: 数据文件结构树类
 '''
 import enum
 import os.path as os_path
-from os import remove as os_remove
+# from os import remove as os_remove
 from os import sep, makedirs
-import warnings
+# import warnings
 import json
 from collections import deque
 import logging
@@ -35,6 +35,8 @@ logger = logging.getLogger(set_db_logger())
 
 # ----------------------------------------------------------------------------------------------
 # 函数
+
+
 def strs2StoreFormat(t):
     '''
     将字符串元组解析成为StoreFormat
@@ -74,6 +76,7 @@ class StoreFormat(object):
     -----
     目前只支持三层分类，第一层为DataClassfication，第二层为DataValueCategory，第三层为DataFormatCategory
     '''
+
     def __init__(self):
         self._rule = {DataClassification.STRUCTURED: [DataValueCategory.CHAR, DataValueCategory.NUMERIC],
                       DataClassification.UNSTRUCTURED: [None],
@@ -180,6 +183,7 @@ class ParamsParser(object):
     get_engine: 通过定义的规则获取对应的数据引擎
     parse_relpath: 将相对路径解析为绝对路径
     '''
+
     def __init__(self):
         self._main_path = None
         self._start_time = None
@@ -254,7 +258,6 @@ class ParamsParser(object):
         '''
         self._absolute_path = abs_path
 
-
     @property
     def start_time(self):
         return self._start_time
@@ -302,6 +305,7 @@ class Database(object):
         数据的存储路径，以系统分隔符进行分割，分割后的最后一个名称被确定为数据库名称
         在设置数据库名称时，不要出现重名，即数据库的路径不同，但是名称相同的现象，这种行为会导致数据库管理的混乱
     '''
+
     def __init__(self, db_path):
         self._main_path = db_path
         self._data_tree_root = None
@@ -341,7 +345,6 @@ class Database(object):
                 return False
         return True
 
-
     def query(self, rel_path, store_fmt, start_time=None, end_time=None):
         '''
         查询数据接口
@@ -370,9 +373,9 @@ class Database(object):
         >>> db.query('data2.data21', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES), '2017-01-01', '2018-01-01')
         '''
         params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
-                                                        'store_fmt': store_fmt,
-                                                        'start_time': start_time,
-                                                        'end_time': end_time})
+                                                          'store_fmt': store_fmt,
+                                                          'start_time': start_time,
+                                                          'end_time': end_time})
         # 时间参数校验规则，键为(start_time is None, end_time is None)，值为对应的数据结构分类
         validation_rule = {(True, True): DataClassification.UNSTRUCTURED,
                            (False, False): DataClassification.STRUCTURED,
@@ -412,8 +415,8 @@ class Database(object):
         >>> db.insert(data2, 'data2.data21', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES), 'int32')
         '''
         params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
-                                                        'store_fmt': store_fmt,
-                                                        'dtype': dtype})
+                                                          'store_fmt': store_fmt,
+                                                          'dtype': dtype})
         engine = params.get_engine()
         issuccess = engine.insert(data, params)
         if issuccess:   # 数据成功插入，修改检查元数据是否需要修改，并采取相应操作
@@ -446,7 +449,7 @@ class Database(object):
         >>> db.remove_data('data1.data11.data112', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES))
         '''
         params = ParamsParser.from_dict(self._main_path, {'rel_path': rel_path,
-                                                        'store_fmt': store_fmt})
+                                                          'store_fmt': store_fmt})
         engine = params.get_engine()
         issuccess = engine.remove_data(params)
         if issuccess:
@@ -457,9 +460,8 @@ class Database(object):
             self._dump_meta()
         else:
             logger.warn('[Operation=Database.remove_data, Info=\"Removing data failed!(db={db_name}, rel_path={rel_path})\"]'.
-                        format(db_name=self._db_name,rel_path=rel_path))
+                        format(db_name=self._db_name, rel_path=rel_path))
         return issuccess
-
 
     def move_to(self, source_rel_path, dest_rel_path, store_fmt):
         '''
@@ -482,9 +484,9 @@ class Database(object):
         >>> db.move_to('data1.data11.data112', 'data1.data12.data121', (DataClassification.STRUCTURED, DataValueCategory.NUMERIC, DataFormatCategory.TIME_SERIES))
         '''
         src_params = ParamsParser.from_dict(self._main_path, {'rel_path': source_rel_path,
-                                                            'store_fmt': store_fmt})
+                                                              'store_fmt': store_fmt})
         dest_params = ParamsParser.from_dict(self._main_path, {'rel_path': dest_rel_path,
-                                                             'store_fmt': store_fmt})
+                                                               'store_fmt': store_fmt})
         if source_rel_path == dest_rel_path:
             logger.warn('[Operation=Database.move_to, Info=\"source_rel_path({}) and dest_rel_path are the same!\"]'.
                         format(source_rel_path))
@@ -507,8 +509,8 @@ class Database(object):
             new_parent_node.add_child(node)
             self._dump_meta()
         else:
-            logger.warn('[Operation=Database.move_to, Info=\"Moving data failed!(db={db_name}, rel_path={rel_path})\"]'.
-                        format(db_name=self._db_name, rel_path=source_rel_path))
+            logger.warn('[Operation=Database.move_to, Info=\"Moving data failed!(db={db_name}, src_path={rel_path}, dest_path={dest_path})\"]'.
+                        format(db_name=self._db_name, rel_path=source_rel_path, dest_path=dest_rel_path))
         return issuccess
 
     def list_alldata(self):
@@ -521,6 +523,7 @@ class Database(object):
             元素为每个数据的相对路径
         '''
         out = []
+
         def get_all(node):
             if node.is_leaf:
                 out.append(self._trans_node_relpath(node.rel_path))
@@ -548,11 +551,11 @@ class Database(object):
         Example
         -------
         >>> db = Database(r'some_path')
-        >>> db.find_data('data1.data11.data112')
+        >>> db.find_data('data112') # data structure: data1.data11.data112
         '''
         nodes = self._find(name, self._data_tree_root, self._precisely_match, True)
         out = [{'rel_path': self._trans_node_relpath(n.rel_path), 'store_fmt': n.store_fmt}
-                for n in nodes]
+               for n in nodes]
         return out
 
     def find_collection(self, name):
@@ -572,7 +575,7 @@ class Database(object):
         Example
         -------
         >>> db = Database(r'some_path')
-        >>> db.find_collection('data1.data11')
+        >>> db.find_collection('data11') # data structure: data1.data11.data112
         '''
         nodes = self._find(name, self._data_tree_root, self._precisely_match, False)
 
@@ -615,7 +618,6 @@ class Database(object):
             root.print_node('')
             print('\n')
 
-
     def _get_metadata_filename(self):
         '''
         解析数据库的主路径，获取存储的元数据的名称，目前假设主路径(无论是文件型数据引擎还是商用数据库型数据引擎)
@@ -625,8 +627,7 @@ class Database(object):
         ------
         fn: string
         '''
-        return os_path.join(self._main_path, '#metadata'+JSON_SUFFIX)
-
+        return os_path.join(self._main_path, '#metadata' + JSON_SUFFIX)
 
     def _load_meta(self):
         '''
@@ -639,7 +640,6 @@ class Database(object):
             self._data_tree_root = DataNode.init_from_meta(meta_data)
         except FileNotFoundError:
             self._data_tree_root = DataNode(self._db_name)
-
 
     def _find(self, name, node, match_func, leaf_node):
         '''
@@ -677,7 +677,6 @@ class Database(object):
                 if match_func(name, node.node_name):
                     result.append(node)
             return result
-
 
     @staticmethod
     def _precisely_match(name, node_name):
@@ -731,6 +730,7 @@ class DataNode(object):
     store_fmt: StoreFormat, default None
         仅叶子节点为非空
     '''
+
     def __init__(self, node_name, store_fmt=None):
         self._node_name = node_name
         self._store_fmt = store_fmt
@@ -773,7 +773,6 @@ class DataNode(object):
             obj = cls(meta_data['node_name'], strs2StoreFormat(meta_data['store_fmt']))
             return obj
 
-
     def add_child(self, child):
         '''
         向该节点添加直接连接的子节点，并且将子节点的母节点设置为当前节点
@@ -783,7 +782,8 @@ class DataNode(object):
         child: DataNode
         '''
         if self.has_child(child):
-            raise ValueError('Current node({}) tries to overlap a child node!'.format(self._node_name))
+            raise ValueError(
+                'Current node({}) tries to overlap a child node!'.format(self._node_name))
         child._parent = self
         self._children[child.node_name] = child
 
@@ -913,7 +913,8 @@ class DataNode(object):
             if len(offsprings) > 1:
                 child.add_offspring(REL_PATH_SEP.join(offsprings[1:]), store_fmt)
             else:
-                raise ValueError('Current node({}) tries to overlap an existing node!'.format(self._node_name))
+                raise ValueError(
+                    'Current node({}) tries to overlap an existing node!'.format(self._node_name))
 
     def change_nodename(self, new_name):
         '''
@@ -977,4 +978,3 @@ class DataNode(object):
             return ''
         else:
             return self._parent.rel_path + REL_PATH_SEP + self._node_name
-
