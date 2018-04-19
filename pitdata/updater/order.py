@@ -65,6 +65,16 @@ class DependencyNode(object):
                 queue.append(child)
         return out
 
+    @property
+    def parents(self):
+        return self._parents
+
+    def __str__(self):
+        return '<DependencyNode: {}>'.format(self.name)
+
+    def __repr__(self):
+        return 'DependencyNode(name={})'.format(self.name)
+
     def __eq__(self, other):
         return self.name == other.name
 
@@ -72,3 +82,63 @@ class DependencyNode(object):
         return hash(self.name) | hash(1)    # 添加1避免与对应的字符串具有相同哈希
 
 
+class DependencyTree(object):
+    '''
+    依赖树类，用于根据数据的依赖关系构建完整的依赖树，并对依赖树进行相关操作
+
+    Parameter
+    ---------
+    dep_data: dict
+        原始描述依赖关系的数据，格式为{name: dep}，其中dep的形式可以为任意，但必须包含数据之间的依赖信息
+    func: function, default None
+        用于从dep_data中提取依赖关系的函数，要求格式为function(dep)->iterable(若无依赖则返回None)，默认情况下的该函数为从
+        pitdata.updater.loader.load_all中提取依赖信息
+    '''
+    def __init__(self, dep_data, func=None):
+        self._dep_tree = {n: DependencyNode(n) for n in dep_data}
+        if func is None:
+            func = lambda x: x['data_description'].dependency
+        for d in self._dep_tree:
+            dep = func(dep_data[d])
+            if dep is not None:
+                for dp in dep:
+                    self._dep_tree[d].add_parent(self._dep_tree[dp])
+
+    def generate_dependency_order(self):
+        '''
+        根据数据之间的依赖关系生成数据的顺序，最终顺序保证任何一个节点的位置一定在其依赖的节点之后，
+        无依赖关系的情况下按照节点的名称排序
+
+        Return
+        ------
+        order: list
+        '''
+        dep_data = sorted(self._dep_tree.values(), key=lambda x: x.name)
+        order = []
+        def add_node(node, container):
+            # 先递归添加该节点的依赖节点，再添加该节点
+            if node not in container:
+                for p in node.parents:
+                    add_node(p, container)
+                container.append(node)
+        for node in dep_data:
+            add_node(node, order)
+        return order
+
+    def get_branch(self, name):
+        '''
+        获取所有对给定节点具有(直接或者间接)依赖的数据的名称(包括该节点)
+
+        Parameter
+        ---------
+        name: string
+            节点的名称
+
+        Return
+        ------
+        out: list
+        '''
+        out = self._dep_tree[name].get_descendant()
+        out = [d.name for d in out]
+        out.append(name)
+        return out

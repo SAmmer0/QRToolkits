@@ -21,15 +21,15 @@ class DataDescription(object):
         其中start_time和end_time为datetime like形式
     update_time: datetime like
         该数据描述对象的更新时间
-    dep: list
-        依赖项，元素为其他的数据描述类的对象
+    dep: list, default None
+        依赖项，元素为其他的数据描述类的对象，默认为None表示无依赖项
     datatype: DataType or string
         数据格式，当前支持的有4中：DataType.PANEL_NUMERIC, DataType.PANEL_CHAR, DataType.TS_NUMERIC, DataType.TS_CHAR
         若类型为TS开头，则calc_method返回pandas.Series，反之则返回pandas.DataFrame
-    desc: string
+    desc: string, default ''
         数据相关描述
     '''
-    def __init__(self, name, calc_method, update_time, dep, datatype, desc):
+    def __init__(self, name, calc_method, update_time, datatype, dep=None, desc=''):
         self.name = name
         self.calc_method = calc_method
         self.update_time = update_time
