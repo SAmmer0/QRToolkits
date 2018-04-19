@@ -6,6 +6,7 @@ Created on Thu Jan 11 14:47:58 2018
 """
 from os import sep
 import enum
+from datetime import datetime
 
 # 相对路径开头
 REL_PATH_HEADER = '.' + sep
@@ -19,6 +20,9 @@ ENCODING = 'utf-8'
 
 # 现金标记代码
 CASH = 'CASH'
+
+# 最早的数据时间：1900-01-01
+START_DATATIME = datetime(1900, 1, 1)
 
 # 周期
 

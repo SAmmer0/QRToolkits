@@ -18,7 +18,7 @@ class DataDescription(object):
         数据名称，数据库中该名称应该唯一，非唯一的名称会导致报错
     calc_method: function
         计算数据的方法，形式为function(start_time, end_time)->pandas.DataFrame or pandas.Series，
-        其中start_time和end_time为datetime like形式
+        其中start_time和end_time为datetime like形式，结果数据包含起始时间
     update_time: datetime like
         该数据描述对象的更新时间
     dep: list, default None

@@ -112,6 +112,7 @@ class DependencyTree(object):
         Return
         ------
         order: list
+            元素为DependencyNode
         '''
         dep_data = sorted(self._dep_tree.values(), key=lambda x: x.name)
         order = []
