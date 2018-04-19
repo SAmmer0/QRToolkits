@@ -1,0 +1,5 @@
+database
+qrtutils
+pandas >= 0.22.0
+datautils
+tdtools

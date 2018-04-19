@@ -21,6 +21,7 @@ logger = logging.getLogger(LOGGER_NAME)
 class DataView(object):
     '''
     数据缓存类(仅限于日频数据)，对数据获取函数进行包装，统一获取数据的接口
+
     Parameter
     ---------
     func: function
@@ -52,6 +53,7 @@ class DataView(object):
     def _check_data(self, query_start, query_end=None):
         '''
         检查缓存数据是否有缺失，并返回数据缺失的方式
+
         Parameter
         ---------
         query_start: datetime like
@@ -84,6 +86,7 @@ class DataView(object):
     def _update_cache(self, update_direction, left_date=None, right_date=None):
         '''
         更新数据缓存
+
         Parameter
         ---------
         updat_direction: CacheStatus
@@ -123,6 +126,7 @@ class DataView(object):
     def _update_both(self, left_date, right_date):
         '''
         对两个时间方向的数据进行更新
+
         Parameter
         ---------
         left_date: datetime
@@ -147,6 +151,7 @@ class DataView(object):
     def _update_one(self, date, update_direction):
         '''
         对一个时间方向的数据进行更新
+
         Parameter
         ---------
         date: datetime
@@ -186,6 +191,7 @@ class DataView(object):
     def _update_extendable_status(self, left_date=None, right_date=None):
         '''
         对数据扩展状态进行更新，仅在每次更新了_cache_start和_cache_end后调用
+
         Parameter
         ---------
         left_date: datetime, default None
@@ -206,6 +212,7 @@ class DataView(object):
     def get_csdata(self, date):
         '''
         获取横截面数据
+
         Parameter
         ---------
         date: datetime like
@@ -228,6 +235,7 @@ class DataView(object):
     def get_tsdata(self, start_time, end_time):
         '''
         获取时间序列数据(包含边界)
+
         Parameter
         ---------
         start_time: datetime like
