@@ -23,6 +23,7 @@ calendar_cache = {}
 def update_data(data, rel_path):
     '''
     更新交易日历的数据
+
     Parameter
     ---------
     data: list like
@@ -40,6 +41,7 @@ def get_calendar(calendar_rel_path):
     '''
     获取给定相对路径的日历，若没有对应的数据(日历数据或者交易时间数据)则报错
     若需要添加日历数据，调用update_data，若需要添加交易时间数据，需要手动添加到tdtools.const的TRADING_TIME中
+    
     Parameter
     ---------
     calendar_rel_path: string

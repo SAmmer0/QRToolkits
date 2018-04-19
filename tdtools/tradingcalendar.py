@@ -47,6 +47,7 @@ class TradingCalendar(object):
         '''
         按照给定的频率对交易日进行分类(例如，按照月度、周度或者年度)，然后从每个分组中选出一个日期作为目标日，
         并将所有分组的目标日构成的序列存入缓存中
+
         Parameter
         ---------
         fmt: string
@@ -68,6 +69,7 @@ class TradingCalendar(object):
     def __date_pretreatment(self, *args):
         '''
         对日期进行预处理：将日期转换为pd.TimeStamp类型并检查给定的日期是否在数据范围内
+
         Parameter
         ---------
         args: iterable
@@ -91,6 +93,7 @@ class TradingCalendar(object):
         '''
         获取一段时间内(包含起始和终止日期)的交易日按照给定周期分类后的目标日期序列
         这里的目标日期是指每个周期内的特殊日期，比如说第一个或者最后一个交易日
+
         Parameter
         ---------
         start_time: datetime like
@@ -124,6 +127,7 @@ class TradingCalendar(object):
     def get_tradingdays(self, start_time, end_time, include_type='both'):
         '''
         获取给定时间区间内的交易日
+
         Parameter
         ---------
         start_time: datetime like
@@ -155,6 +159,7 @@ class TradingCalendar(object):
     def count(self, start_time, end_time, include_type='both'):
         '''
         获取给定时间区间内的交易日的数量
+
         Parameter
         ---------
         start_time: datetime like
@@ -177,6 +182,7 @@ class TradingCalendar(object):
         offset > 0表示往未来推移，offset < 0表示往过去推移，offset不能等于0(这种行为会导致不确定的结果)
         例如，offset=1表示计算与其相邻的下一个(未来)交易日(即>=date且为交易日)，其他以此类推
         同样，offset=-1表示计算与其相邻的上一个(过去)交易日，其他类推
+
         Parameter
         ---------
         date: datetime like
@@ -202,6 +208,7 @@ class TradingCalendar(object):
     def is_tradingday(self, date):
         '''
         判断给定的日期是否是交易日
+
         Parameter
         ---------
         date: datetime like
@@ -220,6 +227,7 @@ class TradingCalendar(object):
         '''
         获取距离给定日期最近的交易日(date为交易日，则直接返回date)，主要用于弥补shift_tradingdays
         不能将offset设置为0的缺陷
+
         Parameter
         ---------
         date: datetime like
@@ -245,6 +253,7 @@ class TradingCalendar(object):
     def is_cycle_target(self, date, freq, target):
         '''
         判断给定的日期是否是某个周期下的特殊日期，同get_cycle_targets中定义的日期
+
         Parameter
         ---------
         date: datetime like
@@ -276,6 +285,7 @@ class TradingCalendar(object):
         '''
         判断给定的时间是否为交易时间，条件包含两个:
         当天日期是交易日，当前时间在交易时间内
+        
         Parameter
         ---------
         t: datetime
