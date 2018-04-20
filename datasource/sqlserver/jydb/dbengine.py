@@ -6,8 +6,9 @@ Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/4/10
 """
+from os.path import join, dirname
 from qrtutils import parse_config
 from datasource.sqlserver.utils import SQLConnector
 
-config = parse_config('config.json')
+config = parse_config(join(dirname(__file__), 'config.json'))
 jydb = SQLConnector(**config)

@@ -2,7 +2,7 @@
     // path where saving all data
     "db_path": "E:\\ResearchData",
     // path of description files
-    "data_description_file_path": "",
+    "data_description_file_path": "C:\\Users\\c\\Desktop\\test\\loader_test",
     // the start date of all data, that is, only data later than this value will be saved in the database
     "data_start_date": "2007-01-01",
     "log":{
