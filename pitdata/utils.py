@@ -33,20 +33,23 @@ class DataDescription(object):
         self.name = name
         self.calc_method = calc_method
         self.update_time = update_time
-        self.dependency = tuple(dep)
+        if dep is not None:
+            self.dependency = tuple(dep)
+        else:
+            self.dependency = dep
         if isinstance(datatype, str):
             datatype = DataType[datatype]
         self.datatype = datatype
         self.description = desc
 
     def __str__(self):
-        res = '<DataDescription: name={name}, update_time={ut}, dependency={dep}, datatype={dt}, description={desc}>'
+        res = '<DataDescription: name={name}, update_time={ut:%Y-%m-%d}, dependency={dep}, datatype={dt}, description={desc}>'
         return res.format(name=self.name, ut=self.update_time, dep=self.dependency,
                           dt=self.datatype, desc=self.description)
 
     def __repr__(self):
         res = 'DataDescription({name!r}, {fun!r}, {ut!r}, {dep!r}, {dt!r}, {desc!r})'
         return res.format(name=self.name, fun=self.calc_method, ut=self.update_time,
-                          dep=self.update_time, dt=self.datatype, desc=self.description)
+                          dep=self.dependency, dt=self.datatype, desc=self.description)
     def __eq__(self, other):
         return self.name == other.name
