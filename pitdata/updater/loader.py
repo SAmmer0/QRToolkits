@@ -16,10 +16,6 @@ from pitdata.const import CONFIG
 from database.const import REL_PATH_SEP
 
 # --------------------------------------------------------------------------------------------------
-# 缓存
-data_dictionary_cache = None
-
-# --------------------------------------------------------------------------------------------------
 # 功能函数
 
 
@@ -60,9 +56,6 @@ def load_all():
     out: dict
         数据字典，格式为{name: {'data_description': dd, 'rel_path': rel_path}}
     '''
-    global data_dictionary_cache
-    if data_dictionary_cache is not None:
-        return data_dictionary_cache
     root_path = CONFIG['data_description_file_path']
     queue = deque()
     queue.append((root_path, ''))    # (abs_path, rel_path)
@@ -73,7 +66,7 @@ def load_all():
             obj = file2object(abs_path)
             if obj.name in out:
                 raise IndexError('Duplicate data name!(duplication={n}, relative_path={rp})'.
-                                 format(n=obj.name, rp=rel_path))
+                                 format(n=obj.name, rp=rel_path[1:]))
             out[obj.name] = {'data_description': obj,
                              'rel_path': rel_path[1:]}
         else:
@@ -85,7 +78,6 @@ def load_all():
                 else:
                     frp = f
                 queue.append((op_join(abs_path, f), REL_PATH_SEP.join([rel_path, frp])))
-    data_dictionary_cache = out
     return out
 
 
@@ -103,8 +95,6 @@ def find_data_description(name):
     dd: pitdata.utils.DataDescription
     rel_path: string
     '''
-    global data_dictionary_cache
-    if data_dictionary_cache is None:
-        data_dictionary_cache = load_all()
+    data_dictionary_cache = load_all()
     res = data_dictionary_cache[name]
     return res['data_description'], res['rel_path']
