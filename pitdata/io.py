@@ -129,7 +129,7 @@ def list_all_data():
     all_data_node = db.find_collection(db_name)['']
     reverse_map = {DT_MAP[k]['store_fmt']: k for k in DT_MAP}
     out = {d['rel_path'].split(REL_PATH_SEP)[-1]:
-           {'rel_path': d['rel_path'], 'datatype': reverse_map[d['store_fmt']]}
+           {'rel_path': d['rel_path'], 'datatype': reverse_map[d['store_fmt'].data]}
            for d in all_data_node}
     return out
 

@@ -1,10 +1,10 @@
 {
     // path where saving all data
-    "db_path": "E:\\ResearchData",
+    "db_path": "C:\\Users\\c\\Desktop\\test\\operator_test",
     // path of description files
     "data_description_file_path": "C:\\Users\\c\\Desktop\\test\\loader_test",
     // the start date of all data, that is, only data later than this value will be saved in the database
-    "data_start_date": "2007-01-01",
+    "data_start_date": "2018-01-01",
     "log":{
         // whether enable the database module log, this setting does not work, it's just used to 
         // be consistent with data engine log setting

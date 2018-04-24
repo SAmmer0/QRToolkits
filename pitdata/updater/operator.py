@@ -39,8 +39,8 @@ def load_metadata(filename):
         return {}
     with open(file_path, 'r', encoding=ENCODING) as f:
         metadata = json.load(f)
-    for d in metadata:
-        metadata[d] = trans_date(d)
+    for d, v in metadata.items():
+        metadata[d] = trans_date(v)
     return metadata
 
 def dump_metadata(metadata, filename):
@@ -58,7 +58,7 @@ def dump_metadata(metadata, filename):
     file_path = join(dbpath, filename)
     tobe_dumped = {d: metadata[d].strftime('%Y-%m-%d')
                    for d in metadata}
-    with open(file_path, 'r', encoding=ENCODING) as f:
+    with open(file_path, 'w', encoding=ENCODING) as f:
         json.dump(tobe_dumped, f)
 
 
@@ -70,9 +70,9 @@ def update_single_data(data_msg, start_time, end_time, ut_meta):
     ---------
     data_msg: dict
         load_all函数返回的数据字典中的值，具体格式为{'data_description': dd, 'rel_path': rel_path}
-    start_time: datetime like
+    start_time: datetime
         更新的起始时间(准确的数据时间，经过交易日调整)
-    end_time: datetime like
+    end_time: datetime
         更新的终止时间(准确的数据时间，经过交易日调整)
     ut_meta(inout): dict
         更新时间元数据(函数运行过程中会修改ut_meta中的数据)
@@ -87,6 +87,7 @@ def update_single_data(data_msg, start_time, end_time, ut_meta):
         data = update_func(start_time, end_time)
     except Exception as e:
         # 此处添加日志记录
+        print(e)
         return False
     result = insert_data(data, data_msg['rel_path'], dd.datatype)
     if result:    # 插入数据成功后更新元数据
@@ -112,6 +113,8 @@ def is_dependency_updated(data_msg, ut_meta, end_time):
     result: boolean
     '''
     dd = data_msg['data_description']
+    if dd.dependency is None:    # 无依赖项
+        return True
     for dep in dd.dependency:
         if ut_meta[dep] != end_time:
             return False
@@ -148,7 +151,7 @@ def update_all(show_progress=True):
     ut_meta = load_metadata(METADATA_FILENAME)
     update_order = [d.name for d in DependencyTree(data_dict).generate_dependency_order()]
     end_time = get_endtime()
-    default_start_time = CONFIG['data_start_date']
+    default_start_time = trans_date(CONFIG['data_start_date'])
     update_result = True
     for data_name in update_order:
         d_msg = data_dict[data_name]

@@ -12,9 +12,6 @@ import pandas as pd
 
 from pitdata.io import query_data, list_all_data, show_db_structure
 
-# --------------------------------------------------------------------------------------------------
-# 数据详情信息的缓存，若数据库中插入新的数据，该变量需要通过reload更新
-data_msg = list_all_data()
 
 # --------------------------------------------------------------------------------------------------
 # 功能函数
@@ -35,7 +32,7 @@ def query(data_name, start_time, end_time=None):
     ------
     out: pandas.DataFrame or pandas.Series
     '''
-    dmsg = data_msg.get(data_name, None)
+    dmsg = list_all_data().get(data_name, None)
     if dmsg is None:
         raise ValueError('Unrecognizable data name(name={})!'.format(data_name))
     out = query_data(dmsg['rel_path'], dmsg['datatype'], start_time, end_time)
@@ -89,7 +86,7 @@ def list_data(nfilter=None):
     ------
     out: list
     '''
-    out = sorted(data_msg.keys())
+    out = sorted(list_all_data().keys())
     if nfilter is not None:
         out = [n for n in out if nfilter in n]
     return out
