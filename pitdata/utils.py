@@ -14,8 +14,6 @@ class DataDescription(object):
 
     Parameter
     ---------
-    name: string
-        数据名称，数据库中该名称应该唯一，非唯一的名称会导致报错
     calc_method: function
         计算数据的方法，形式为function(start_time, end_time)->pandas.DataFrame or pandas.Series，
         其中start_time和end_time为datetime like形式，结果数据包含起始时间
@@ -29,8 +27,8 @@ class DataDescription(object):
     desc: string, default ''
         数据相关描述
     '''
-    def __init__(self, name, calc_method, update_time, datatype, dep=None, desc=''):
-        self.name = name
+    def __init__(self, calc_method, update_time, datatype, dep=None, desc=''):
+        self.name = ''
         self.calc_method = calc_method
         self.update_time = update_time
         if dep is not None:
@@ -41,6 +39,16 @@ class DataDescription(object):
             datatype = DataType[datatype]
         self.datatype = datatype
         self.description = desc
+
+    def set_name(self, name):
+        '''
+        设置数据名称
+
+        Parameter
+        ---------
+        name: string
+        '''
+        self.name = name
 
     def __str__(self):
         res = '<DataDescription: name={name}, update_time={ut:%Y-%m-%d}, dependency={dep}, datatype={dt}, description={desc}>'

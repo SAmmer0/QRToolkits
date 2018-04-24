@@ -38,15 +38,16 @@ def file2object(file_path):
 
     Notes
     -----
-    计算文件必须要包含一个名为dd的DataDescription对象，且任何一个dd对象的name属性不能与其他
-    文件中的name属性重复，任何一个数据的唯一标识是该数据的名称(name)，推荐数据文件的名称与数据
-    对象的name属性一致
+    计算文件必须要包含一个名为dd的DataDescription对象，所有数据描述对象的名称与其
+    计算文件名称一致
     '''
     module_name = file_path.split(sep)[-1].split('.')[0]
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     obj = getattr(module, 'dd')
+    file_name = file_path.split(sep)[-1].split('.')[0]
+    obj.set_name(file_name)    # 自动设置数据名称为文件名
     return obj
 
 
@@ -71,17 +72,19 @@ def load_all():
         if op_isfile(abs_path) and abs_path.endswith('.py'):   # 必须是Python可执行文件
             obj = file2object(abs_path)
             if obj.name in out:
-                raise IndexError('Duplicate data name!(duplication={})'.format(obj.name))
+                raise IndexError('Duplicate data name!(duplication={n}, relative_path={rp})'.
+                                 format(n=obj.name, rp=rel_path))
             out[obj.name] = {'data_description': obj,
-                             'rel_path': rel_path[1:] + REL_PATH_SEP + obj.name}
+                             'rel_path': rel_path[1:]}
         else:
             if abs_path.endswith('__pycache__') or op_isfile(abs_path):    # 忽略Python缓存文件夹以及非Python脚本文件
                 continue
             for f in listdir(abs_path):
                 if '.py' in f:  # Python可执行文件
-                    queue.append((op_join(abs_path, f), rel_path))    # 对于脚本文件，相对路径由其中的数据定义决定
+                    frp = f[:-3]    # 剔除文件后缀
                 else:
-                    queue.append((op_join(abs_path, f), REL_PATH_SEP.join([rel_path, f])))
+                    frp = f
+                queue.append((op_join(abs_path, f), REL_PATH_SEP.join([rel_path, frp])))
     data_dictionary_cache = out
     return out
 
