@@ -9,5 +9,5 @@ Created: 2018/4/25
 
 from pitdata.tools import delete_computing_file, move_computing_file
 
-print(delete_computing_file('desttest'))
+print(delete_computing_file('universe'))
 print(delete_computing_file('duniverse'))

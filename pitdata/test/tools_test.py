@@ -8,7 +8,7 @@ Created: 2018/4/25
 """
 from pitdata.tools import delete_computing_file, move_computing_file
 
-print(move_computing_file('universe', 'basic.desttest'))
+print(move_computing_file('universe', 'basic.universe'))
 print(move_computing_file('duniverse', 'basic.tmptest'))
 
 # print(delete_computing_file('desttest'))

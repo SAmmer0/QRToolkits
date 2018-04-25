@@ -21,6 +21,7 @@ from pitdata.io import list_all_data, move_data, delete_data
 from pitdata.const import CONFIG, LOGGER_NAME, METADATA_FILENAME
 from pitdata.updater.operator import dump_metadata, load_metadata
 from pitdata.updater.loader import load_all
+from pitdata.updater.order import DependencyTree
 
 # --------------------------------------------------------------------------------------------------
 # 预处理
@@ -131,7 +132,7 @@ def move_computing_file(name, dest):
     name: string
         数据名称
     dest: string
-        新位置的相对路径
+        新位置的相对路径，新路径的数据名称要与之前的数据相同
 
     Return
     ------
@@ -146,6 +147,10 @@ def move_computing_file(name, dest):
     if dest == source_relpath:
         logger.warning('[Operation=move_computing_file, Info=\"Source path and destination path are the same(data={})!\"'.format(name))
         return False
+    if dest.split(REL_PATH_SEP)[-1] != name:
+        logger.warning('[Operation=move_computing_file, Info=\"Destination data name(path={d}) is not consistent with origin(path={s}).\"]'.
+                       format(d=dest, s=source_relpath))
+        return False
     source_abspath = cf_relpath2abspath(source_relpath)
     dest_abspath = cf_relpath2abspath(dest)
     dest_name = dest.split(REL_PATH_SEP)[-1]
@@ -154,6 +159,7 @@ def move_computing_file(name, dest):
     try:
         move(source_abspath, dest_abspath)
         move_data(source_relpath, dest, all_data[name]['datatype'])
+        logger.info('[Operation=move_computing_file, Info=\"Moving data from {s} to {d}.\"]'.format(s=source_relpath, d=dest))
         delete_empty_folder(dirname(source_abspath))
         if dest_name != name:    # 新数据的名称与原数据不同，需要修改数据库中元数据文件
             metadata = load_metadata(METADATA_FILENAME)
@@ -164,10 +170,9 @@ def move_computing_file(name, dest):
     except Exception as e:
         logger.exception(e)
         return False
-    logger.info('[Operation=move_computing_file, Info=\"Moving data from {s} to {d}.\"]'.format(s=source_relpath, d=dest))
     return True
 
-def delete_computing_file(name, recursively=True):
+def delete_computing_file(name, delete_branch=True):
     '''
     删除给定数据的计算文件
 
@@ -175,8 +180,8 @@ def delete_computing_file(name, recursively=True):
     ---------
     name: string
         数据名称
-    recursively: boolean
-        递归删除所有对该数据具有依赖的数据
+    delete_branch: boolean, default True
+        删除所有对该数据具有依赖的数据
 
     Return
     ------
@@ -189,9 +194,17 @@ def delete_computing_file(name, recursively=True):
         return False
     data_relpath = all_data[name]['rel_path']
     data_abspath = cf_relpath2abspath(data_relpath)
+
+    if delete_branch:    # 删除所有对当前节点具有依赖的节点
+        dd = load_all()
+        dd_tree = DependencyTree(dd)
+        for child in dd_tree.get_branch(name):
+            if child != name:
+                delete_computing_file(child, False)
     try:
         remove(data_abspath)
         delete_data(data_relpath, all_data[name]['datatype'])
+        logger.info('[Operation=delete_computing_file, Info=\"Delete data(path={}) successfully.\"]'.format(data_relpath))
         delete_empty_folder(dirname(data_abspath))
         metadata = load_metadata(METADATA_FILENAME)
         del metadata[name]
@@ -199,7 +212,4 @@ def delete_computing_file(name, recursively=True):
     except Exception as e:
         logger.exception(e)
         return False
-    logger.info('[Operation=delete_computing_file, Info=\"Delete data(path={}) successfully.\"]'.format(data_relpath))
-    if recursively:    # 递归删除
-        dd = load_all()
     return True
