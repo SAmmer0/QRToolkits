@@ -68,7 +68,6 @@ def query_group(name_group, start_time, end_time=None):
     if len(name_group) <= 1:
         logger.warning('[Operation=query_group, '+
                        'Info=\"Parameter name_group has a length of {}, the result will be uncertain!\"]'.format(len(name_group)))
-        pass    # 添加警告：不可预测的结果，推荐使用query
     datas = [query(d, start_time, end_time) for d in name_group]
     data_shapes = [d.shape for d in datas]
     if not all(ldf == data_shapes[0] for ldf in data_shapes):
