@@ -8,10 +8,17 @@ Created: 2018/4/18
 
 用于处理主要的数据请求
 """
+import logging
+
 import pandas as pd
 
 from pitdata.io import query_data, list_all_data, show_db_structure
+from pitdata.const import LOGGER_NAME
 
+# --------------------------------------------------------------------------------------------------
+# 预处理
+# logger初始化
+logger = logging.getLogger(LOGGER_NAME)
 
 # --------------------------------------------------------------------------------------------------
 # 功能函数
@@ -59,6 +66,8 @@ def query_group(name_group, start_time, end_time=None):
         若请求的是面板数据，则index为多重索引，0级是时间，1级是数据名称
     '''
     if len(name_group) <= 1:
+        logger.warning('[Operation=query_group, '+
+                       'Info=\"Parameter name_group has a length of {}, the result will be uncertain!\"]'.format(len(name_group)))
         pass    # 添加警告：不可预测的结果，推荐使用query
     datas = [query(d, start_time, end_time) for d in name_group]
     data_shapes = [d.shape for d in datas]

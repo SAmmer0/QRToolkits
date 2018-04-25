@@ -10,14 +10,22 @@ from os.path import join, exists
 import json
 from collections import deque
 import datetime as dt
+import logging
 
-from pitdata.const import CONFIG, METADATA_FILENAME, UPDATE_TIME_THRESHOLD
+from pitdata.const import CONFIG, METADATA_FILENAME, UPDATE_TIME_THRESHOLD, LOGGER_NAME
 from pitdata.updater.loader import load_all
 from pitdata.updater.order import DependencyTree
 from pitdata.io import insert_data
 from qrtconst import ENCODING
 from tdtools import trans_date, get_calendar
 
+# --------------------------------------------------------------------------------------------------
+# 预处理
+# 日志记录初始化
+logger = logging.getLogger(LOGGER_NAME)
+
+# --------------------------------------------------------------------------------------------------
+# 功能函数
 def load_metadata(filename):
     '''
     从文件中加载并转换元数据，元数据的格式如下
@@ -87,7 +95,7 @@ def update_single_data(data_msg, start_time, end_time, ut_meta):
         data = update_func(start_time, end_time)
     except Exception as e:
         # 此处添加日志记录
-        print(e)
+        logger.exception(e)
         return False
     result = insert_data(data, data_msg['rel_path'], dd.datatype)
     if result:    # 插入数据成功后更新元数据

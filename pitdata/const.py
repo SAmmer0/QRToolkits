@@ -10,7 +10,7 @@ import enum
 from os.path import dirname, join
 
 from database import DataClassification, DataFormatCategory, DataValueCategory
-from qrtutils import parse_config
+from qrtutils import parse_config, set_logger
 
 
 # 数据格式定义和映射
@@ -33,6 +33,9 @@ DT_MAP = {
 
 # 加载和设置配置
 CONFIG = parse_config(join(dirname(__file__), 'config.json'))
+
+# 设置日志
+LOGGER_NAME = set_logger(CONFIG['log'], dirname(__file__), 'PITDATA')
 
 # 元数据文件名
 METADATA_FILENAME = '#update_time_metadata.json'

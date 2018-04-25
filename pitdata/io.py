@@ -66,7 +66,7 @@ def query_data(rel_path, datatype, start_time, end_time=None):
     out: pandas.Series or pandas.DataFrame
     '''
     if datatype.name.startswith('TS_') and end_time == None:
-        raise ValueError('Time series data cannot query cross-section data!')
+        raise ValueError('Time series cannot query cross-section data!')
     query_param = DT_MAP[datatype]
     out = db.query(rel_path, query_param['store_fmt'], start_time, end_time)
     return out

@@ -113,7 +113,7 @@ def set_logger(log_config, module_path, logger_name):
     ---------
     log_config: dict
         日志设置配置，需要包含以下选项
-        "log_to_file": boolean, 是否把日志写入文件
+        "log_to_file": boolean, 是否把日志写入文件，如果为False则直接打印
         "log_path": string, 如果log_to_file为True，则需要提供日志的写入路径，可以为相对路径
         "log_level": string, logging模块可接受的日志记录等级
         "format": string, 日志记录的格式
