@@ -11,8 +11,9 @@ import json
 from collections import deque
 import datetime as dt
 import logging
+from sys import stdout
 
-from pitdata.const import CONFIG, METADATA_FILENAME, UPDATE_TIME_THRESHOLD, LOGGER_NAME
+from pitdata.const import CONFIG, METADATA_FILENAME, UPDATE_TIME_THRESHOLD, LOGGER_NAME, UPDATING_LOGGER
 from pitdata.updater.loader import load_all
 from pitdata.updater.order import DependencyTree
 from pitdata.io import insert_data
@@ -21,8 +22,9 @@ from tdtools import trans_date, get_calendar
 
 # --------------------------------------------------------------------------------------------------
 # 预处理
-# 日志记录初始化
+# 系统日志记录初始化
 logger = logging.getLogger(LOGGER_NAME)
+updating_logger = logging.getLogger(UPDATING_LOGGER)
 
 # --------------------------------------------------------------------------------------------------
 # 功能函数
@@ -161,14 +163,31 @@ def update_all(show_progress=True):
     end_time = get_endtime()
     default_start_time = trans_date(CONFIG['data_start_date'])
     update_result = True
+    stdout_handler = None    # stdout处理函数占位
+    if show_progress:    # 添加终端打印日志处理函数
+        stdout_handler = logging.StreamHandler(stdout)
+        formater = logging.Formatter("%(asctime)s: %(message)s", "%Y-%m-%d %H:%M:%S")
+        stdout_handler.setFormatter(formater)
+        updating_logger.addHandler(stdout_handler)
+
     for data_name in update_order:
         d_msg = data_dict[data_name]
         if not is_dependency_updated(d_msg, ut_meta, end_time):    # 依赖项还未更新，则直接忽视(本次不进行更新)
+            updating_logger.info('[data_name={dn}, description=\"Dependency has not been updated, ignored\"]'.
+                                 format(dn=data_name))
             continue
         start_time = ut_meta.get(data_name, default_start_time)
+        if start_time >= end_time:
+            updating_logger.info('[data_name={dn}, description=\"Data has been updated, ignored\"]'.
+                                 format(dn=data_name))
+            continue
         result = update_single_data(d_msg, start_time, end_time, ut_meta)
+        updating_logger.info('[data_name={dn}, start_time={st:%Y-%m-%d}, end_time={et:%Y-%m-%d}, result={res}]'.
+                             format(dn=data_name, st=start_time, et=end_time, res=result))
         if result:    # 更新成功之后，写入元数据
             dump_metadata(ut_meta, METADATA_FILENAME)
         else:
             update_result = False
+    if stdout_handler is not None:
+        updating_logger.removeHandler(stdout_handler)
     return update_result

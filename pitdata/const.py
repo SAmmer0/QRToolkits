@@ -8,11 +8,46 @@ Created: 2018/4/17
 """
 import enum
 from os.path import dirname, join
+from os import sep, makedirs
+import logging
 
 from database import DataClassification, DataFormatCategory, DataValueCategory
 from qrtutils import parse_config, set_logger
 
+# --------------------------------------------------------------------------------------------------
+# 数据更新日志设置函数
+def set_updating_logger(cfg, main_logger_name):
+    '''
+    对数据更新日志进行设置，当前设置仅添加日志写入到文件的功能，如果需要打印或者其他输出，需要自行添加，使用完后，
+    推荐将设置恢复到原始设置
 
+    Parameter
+    ---------
+    cfg: dict
+        模块配置
+
+    Return
+    ------
+    logger_name: string
+    '''
+    db_path = cfg['db_path']
+    logger_name = main_logger_name + '.' + db_path.split(sep)[-1]    # 日志名称为: 主logger名称.数据库名称
+    logger = logging.getLogger(logger_name)
+    if logger.handlers:    # 避免重复设置日志处理函数
+        return logger.name
+    formater = logging.Formatter("%(asctime)s: %(message)s", "%Y-%m-%d %H:%M:%S")
+    logger.setLevel(logging.DEBUG)
+    try:
+        handler = logging.FileHandler(join(db_path, 'data_updating.log'))
+    except FileNotFoundError:
+        makedirs(db_path)
+        handler = logging.FileHandler(join(db_path, 'data_updating.log'))
+    handler.setFormatter(formater)
+    logger.addHandler(handler)
+    return logger.name
+
+# --------------------------------------------------------------------------------------------------
+# 常量
 # 数据格式定义和映射
 class DataType(enum.Enum):
     PANEL_NUMERIC = enum.auto()  # 数值型面板数据
@@ -36,9 +71,12 @@ CONFIG = parse_config(join(dirname(__file__), 'config.json'))
 
 # 设置日志
 LOGGER_NAME = set_logger(CONFIG['log'], dirname(__file__), 'PITDATA')
+UPDATING_LOGGER =  set_updating_logger(CONFIG, LOGGER_NAME)
 
 # 元数据文件名
 METADATA_FILENAME = '#update_time_metadata.json'
 
 # 更新的隔断时间(24小时制的小时时间)。即若当天时间早于该时间，以上个交易日为最新的时间
 UPDATE_TIME_THRESHOLD = 16
+
+

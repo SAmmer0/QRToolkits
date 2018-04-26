@@ -8,4 +8,4 @@ Created: 2018/4/24
 """
 from pitdata.updater.operator import update_all
 
-print(update_all())
+print(update_all(show_progress=False))
