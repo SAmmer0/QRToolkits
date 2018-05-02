@@ -77,6 +77,9 @@ UPDATING_LOGGER =  set_updating_logger(CONFIG, LOGGER_NAME)
 METADATA_FILENAME = '#update_time_metadata.json'
 
 # 更新的隔断时间(24小时制的小时时间)。即若当天时间早于该时间，以上个交易日为最新的时间
-UPDATE_TIME_THRESHOLD = 16
+UPDATE_TIME_THRESHOLD = 18
+
+# 计算文件所在的文件夹
+CALCULATION_FOLDER_PATH = CONFIG['data_description_file_path']
 
 
