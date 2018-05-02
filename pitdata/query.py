@@ -37,7 +37,8 @@ def query(data_name, start_time, end_time=None):
 
     Return
     ------
-    out: pandas.DataFrame or pandas.Series
+    out: pandas.DataFrame, pandas.Series or None
+        None表示没有所请求的数据
     '''
     dmsg = list_all_data().get(data_name, None)
     if dmsg is None:
@@ -61,14 +62,17 @@ def query_group(name_group, start_time, end_time=None):
 
     Return
     ------
-    out: pandas.DataFrame
+    out: pandas.DataFrame or None
         若请求的是横截面数据，则index为数据名称
         若请求的是面板数据，则index为多重索引，0级是时间，1级是数据名称
+        None表示请求的数据中至少有一个没有查询到给定要求的数据
     '''
     if len(name_group) <= 1:
         logger.warning('[Operation=query_group, '+
                        'Info=\"Parameter name_group has a length of {}, the result will be uncertain!\"]'.format(len(name_group)))
     datas = [query(d, start_time, end_time) for d in name_group]
+    if any([x is None for x in datas]):
+        return None
     data_shapes = [d.shape for d in datas]
     if not all(ldf == data_shapes[0] for ldf in data_shapes):
         raise ValueError('Input data should have the same shape!')
