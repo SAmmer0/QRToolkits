@@ -82,7 +82,7 @@ def query_group(name_group, start_time, end_time=None):
         return out.T
     else:
         out = pd.concat(datas, axis=0)
-        out.index = pd.MultiIndex.from_product([name_group, datas[0].index])
+        out.index = pd.MultiIndex.from_product([datas[0].index, name_group])
         return out
 
 def list_data(nfilter=None):
