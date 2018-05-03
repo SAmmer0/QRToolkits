@@ -14,13 +14,13 @@ import logging
 from shutil import move, rmtree
 
 from datautils import DataView
-from tdtools import get_calendar
+from tdtools import get_calendar, timeit_wrapper
 from database.const import REL_PATH_SEP
 from pitdata.query import query
 from pitdata.io import list_all_data, move_data, delete_data
 from pitdata.const import CONFIG, LOGGER_NAME, METADATA_FILENAME
 from pitdata.updater.operator import dump_metadata, load_metadata
-from pitdata.updater.loader import load_all
+from pitdata.updater.loader import load_all, find_data_description
 from pitdata.updater.order import DependencyTree
 
 # --------------------------------------------------------------------------------------------------
@@ -213,3 +213,33 @@ def delete_computing_file(name, delete_branch=True):
         logger.exception(e)
         return False
     return True
+
+# --------------------------------------------------------------------------------------------------
+# 临时数据测试功能
+def data_simu_calculation(name, start_time, end_time, timeit=True):
+    '''
+    对数据进行模拟计算，主要用于数据debug和检查数据计算结果是否准确
+
+    Parameter
+    ---------
+    name: string
+        数据名称
+    start_time: datetime like
+        计算数据的开始时间
+    end_time: datetime like
+        计算数据的结束时间
+    timeit: boolean, default True
+        是否对数据计算进行计时
+
+    Return
+    ------
+    data: pandas.Series or pandas.DataFrame
+        数据计算的结果
+    '''
+    dd, _ = find_data_description(name)
+    if timeit:
+        func = timeit_wrapper(dd.calc_method)
+    else:
+        func = dd.calc_method
+    data = func(start_time, end_time)
+    return data
