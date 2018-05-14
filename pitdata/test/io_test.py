@@ -7,6 +7,6 @@ Github: https://github.com/SAmmer0
 Created: 2018/4/24
 """
 
-from pitdata.io import list_all_data
+from pitdata.io import get_db_dictionary
 
-print(list_all_data())
+print(get_db_dictionary())

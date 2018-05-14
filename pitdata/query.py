@@ -12,7 +12,7 @@ import logging
 
 import pandas as pd
 
-from pitdata.io import query_data, list_all_data, show_db_structure
+from pitdata.io import query_data, get_db_dictionary, show_db_structure
 from pitdata.const import LOGGER_NAME
 
 # --------------------------------------------------------------------------------------------------
@@ -40,7 +40,7 @@ def query(data_name, start_time, end_time=None):
     out: pandas.DataFrame, pandas.Series or None
         None表示没有所请求的数据
     '''
-    dmsg = list_all_data().get(data_name, None)
+    dmsg = get_db_dictionary().get(data_name, None)
     if dmsg is None:
         raise ValueError('Unrecognizable data name(name={})!'.format(data_name))
     out = query_data(dmsg['rel_path'], dmsg['datatype'], start_time, end_time)
@@ -98,7 +98,7 @@ def list_data(nfilter=None):
     ------
     out: list
     '''
-    out = sorted(list_all_data().keys())
+    out = sorted(get_db_dictionary().keys())
     if nfilter is not None:
         out = [n for n in out if nfilter in n]
     return out

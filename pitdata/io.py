@@ -116,7 +116,7 @@ def move_data(src_path, dest_path, datatype):
     result = db.move_to(src_path, dest_path, move_param['store_fmt'])
     return result
 
-def list_all_data():
+def get_db_dictionary():
     '''
     以字典的形式返回当前数据库中包含的所有数据
 

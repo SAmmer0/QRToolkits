@@ -17,7 +17,7 @@ from datautils import DataView
 from tdtools import get_calendar, timeit_wrapper
 from database.const import REL_PATH_SEP
 from pitdata.query import query
-from pitdata.io import list_all_data, move_data, delete_data
+from pitdata.io import get_db_dictionary, move_data, delete_data
 from pitdata.const import CONFIG, LOGGER_NAME, METADATA_FILENAME
 from pitdata.updater.operator import dump_metadata, load_metadata
 from pitdata.updater.loader import load_all, find_data_description
@@ -139,7 +139,7 @@ def move_computing_file(name, dest):
     result: boolean
         移动成功返回True
     '''
-    all_data = list_all_data()
+    all_data = get_db_dictionary()
     if name not in all_data:
         logger.warning('[Operation=move_computing_file, Info=\"Try to move a data({}) that does not exist!\"]'.format(name))
         return False
@@ -188,7 +188,7 @@ def delete_computing_file(name, delete_branch=True):
     result: boolean
         删除成功返回True
     '''
-    all_data = list_all_data()
+    all_data = get_db_dictionary()
     if name not in all_data:
         logger.warning('[Operation=delete_computing_file, Info=\"Try to delete a data({}) that does not exist!\"]'.format(name))
         return False
@@ -206,6 +206,44 @@ def delete_computing_file(name, delete_branch=True):
         delete_data(data_relpath, all_data[name]['datatype'])
         logger.info('[Operation=delete_computing_file, Info=\"Delete data(path={}) successfully.\"]'.format(data_relpath))
         delete_empty_folder(dirname(data_abspath))
+        metadata = load_metadata(METADATA_FILENAME)
+        del metadata[name]
+        dump_metadata(metadata, METADATA_FILENAME)
+    except Exception as e:
+        logger.exception(e)
+        return False
+    return True
+
+def delete_db_data(name, delete_branch=True):
+    '''
+    仅删除数据库中给定名称的数据
+
+    Parameter
+    ---------
+    name: string
+        需要被删除的数据的名称
+    delete_branch: boolean, default True
+        删除所有对该数据具有依赖关系的数据
+
+    Return
+    ------
+    result: boolean
+        删除成功返回True
+    '''
+    all_data = get_db_dictionary()
+    if name not in all_data:
+        logger.warning('[Operation=delete_db_data, Info=\"Try to delete a data({}) that does not exist!\"]'.format(name))
+        return False
+    data_path = all_data[name]['rel_path']
+    if delete_branch:
+        dd = load_all()
+        dd_tree = DependencyTree(dd)
+        for child in dd_tree.get_branch(name):
+            if child != name:
+                delete_db_data(child, False)
+    try:
+        delete_data(data_path, all_data[name]['datatype'])
+        logger.info('[Operation=delete_db_data, Info=\"Delete data(path={}) successfully.\"]'.format(data_path))
         metadata = load_metadata(METADATA_FILENAME)
         del metadata[name]
         dump_metadata(metadata, METADATA_FILENAME)
