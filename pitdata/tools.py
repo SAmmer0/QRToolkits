@@ -253,7 +253,7 @@ def delete_db_data(name, delete_branch=True):
     return True
 
 # --------------------------------------------------------------------------------------------------
-# 临时数据测试功能
+# 其他功能
 def data_simu_calculation(name, start_time, end_time, timeit=True):
     '''
     对数据进行模拟计算，主要用于数据debug和检查数据计算结果是否准确
@@ -281,3 +281,20 @@ def data_simu_calculation(name, start_time, end_time, timeit=True):
         func = dd.calc_method
     data = func(start_time, end_time)
     return data
+
+def list_branch(name):
+    '''
+    列举以给定数据为节点的数据分支
+
+    Parameter
+    ---------
+    name: string
+        数据节点的名称
+
+    Return
+    ------
+    out: list
+        包含该节点在内所有数据的名称列表，按照名称排序
+    '''
+    tree = DependencyTree(load_all())
+    return sorted(tree.get_branch(name))
