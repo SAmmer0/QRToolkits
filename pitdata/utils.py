@@ -20,7 +20,8 @@ class DataDescription(object):
     update_time: datetime like
         该数据描述对象的更新时间
     dep: list, default None
-        依赖项，元素为其他的数据描述类的对象，默认为None表示无依赖项
+        依赖项，元素为其他的数据的名称，默认为None表示无依赖项，数据的依赖项仅包含在数据计算过程中被
+        显式使用的数据或者被明确要求包含的数据
     datatype: DataType or string
         数据格式，当前支持的有4中：DataType.PANEL_NUMERIC, DataType.PANEL_CHAR, DataType.TS_NUMERIC, DataType.TS_CHAR
         若类型为TS开头，则calc_method返回pandas.Series，反之则返回pandas.DataFrame
