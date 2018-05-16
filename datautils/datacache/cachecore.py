@@ -11,6 +11,7 @@ import logging
 from pandas import to_datetime, concat
 
 from datautils.datacache.const import CacheStatus, LOGGER_NAME
+from tdtools import trans_date
 
 # --------------------------------------------------------------------------------------------------
 # 预处理
@@ -208,6 +209,21 @@ class DataView(object):
             if right_date > self._cache_end:
                 self._extendable[1] = False
 
+    def reset_boundary(self, direction):
+        '''
+        重置数据扩展的边界，即如果当前数据的某个方向的边界被标记为不能扩展，重新修改为可以扩展
+
+        Parameter
+        ---------
+        direction: int
+            重置边界的方向，仅支持[0(数据头), 1(数据尾), 2(数据首尾)]
+        '''
+        if direction not in [0, 1, 2]:
+            raise ValueError('Unsupported \'direction\' parameter({})!'.format(direction))
+        if direction < 2:
+            self._extendable[direction] = True
+        else:
+            self._extendable = [True, True]
 
     def get_csdata(self, date):
         '''
@@ -247,8 +263,7 @@ class DataView(object):
             返回数据的形式取决于提供数据的函数。若提供数据的函数返回值为pandas.DataFram，则返回pandas.DataFrame，
             反之返回pandas.Series
         '''
-        start_time = to_datetime(to_datetime(start_time).strftime('%Y-%m-%d'))
-        end_time = to_datetime(to_datetime(end_time).strftime('%Y-%m-%d'))
+        start_time, end_time = trans_date(start_time, end_time)
         if start_time >= end_time:
             raise ValueError('Improper time parameter order!')
         update_direction = self._check_data(start_time, end_time)
