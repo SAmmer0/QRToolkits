@@ -146,7 +146,8 @@ class ExposureAnalysor(object):
         def add_cash(port):
             if CASH not in port:
                 cash_weight = 1 - sum(port.values())
-                if cash_weight < 0:
+                if cash_weight < 0 and not np.isclose(cash_weight, 0):
+                    print(cash_weight)
                     raise ValueError('The sum of portfolio weights exceeds 1!')
                 port[CASH] = cash_weight
             return pd.Series(port)
