@@ -82,4 +82,5 @@ UPDATE_TIME_THRESHOLD = 18
 # 计算文件所在的文件夹
 CALCULATION_FOLDER_PATH = CONFIG['data_description_file_path']
 
-
+# 配置文件中设置的数据开始时间
+DATA_START_DATE = CONFIG['data_start_date']
