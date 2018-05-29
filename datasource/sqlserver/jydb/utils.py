@@ -6,8 +6,11 @@ Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/4/9
 """
+import pdb
+
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 from tdtools import get_calendar, trans_date, get_last_rpd_date, generate_rpd_series
 from datasource.sqlserver.utils import transform_data, expand_data
@@ -129,6 +132,59 @@ def process_fundamental_data(data, cols, start_time, end_time, max_hist_num, fun
         return res
     out = data.groupby(symbol_col).apply(handler_per_symbol).reset_index()
     out = out.pivot_table('data', index='time', columns=symbol_col)
+    return out
+
+def calc_seasonly_data(data, cols):
+    '''
+    因聚源只保存最新的数据，因此历史过程中的修改痕迹需要自行计算
+    该函数为计算季度数据的函数，季度数据计算方法如下：
+    一季度数据：原数据
+    二季度数据：财报二季度数据-财报一季度数据
+    三季度数据：财报三季度数据-财报二季度数据
+    四季度数据：年报数据-财报三季度数据
+    所有数据均保存历史修改痕迹，该函数只适用于流量数据，不能用于资产负债表等存量数据
+
+    Parameter
+    ---------
+    data: pandas.DataFrame
+        从数据库中取出的数据，必须包含cols参数中传入的列名，数据依次按照证券代码列和更新时间列升序排列
+    cols: iterable
+        元素为列名，长度为4，依次为[证券代码列, 数据列, 更新时间列, 报告期列]
+
+    Return
+    ------
+    out: pandas.DataFrame
+        数据index与df相同，columns仅包含cols中的列，仅将数据列更新为计算的季度数据
+
+    Notes
+    -----
+    返回的数据中，如果有某些股票的第一个数据不是第一季度，则计算的对应的数据为NA值(因没有上一期的记录)
+    '''
+    symbol_col, data_col, update_time_col, rpt_col = cols
+    data = data.loc[data[rpt_col].dt.is_quarter_end]    # 剔除可能不规则的数据
+    def process_per_symbol(df):
+        # 计算单只证券的季度数据
+        tmp_mod_data = df.loc[df[rpt_col].dt.month != 3]
+        obs_data, flag = expand_data(df, update_time_col, rpt_col, 10)
+        res = []
+        for _, tmp_data in tmp_mod_data.iterrows():
+#             pdb.set_trace()
+            tmp_obs_date, tmp_rpt_date = tmp_data.loc[[update_time_col, rpt_col]]
+            last_rpt_date = generate_rpd_series(tmp_rpt_date, 2)[1]
+            tmp_obs_data = obs_data.loc[obs_data[flag] == tmp_obs_date].\
+                           drop_duplicates(subset=[rpt_col], keep='last').\
+                           set_index(rpt_col).loc[:, data_col]
+            try:
+                tmp_value = tmp_obs_data.loc[tmp_rpt_date] - tmp_obs_data.loc[last_rpt_date]
+            except KeyError:
+                tmp_value = np.nan
+            res.append({rpt_col: tmp_rpt_date, update_time_col: tmp_obs_date, data_col: tmp_value})
+        res = pd.DataFrame(res)
+        return res
+    tqdm.pandas()
+    out = data.groupby(symbol_col).progress_apply(process_per_symbol)
+    out = out.reset_index()
+    out = pd.concat([out, data.loc[data[rpt_col].dt.month == 3]], axis=0)
     return out
 
 def calc_tnm(df, data_col, period_flag_col, nperiod=4):
