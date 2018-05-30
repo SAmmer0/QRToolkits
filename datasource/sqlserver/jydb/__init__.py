@@ -11,4 +11,5 @@ from datasource.sqlserver.jydb.utils import (map2td,
                                              get_jydb_tds,
                                              process_fundamental_data,
                                              calc_offsetdata,
-                                             calc_tnm)
+                                             calc_tnm,
+                                             calc_seasonly_data)
