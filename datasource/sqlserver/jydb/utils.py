@@ -7,12 +7,14 @@ Github: https://github.com/SAmmer0
 Created: 2018/4/9
 """
 import pdb
+import warnings
 
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+from collections import deque
 
-from tdtools import get_calendar, trans_date, get_last_rpd_date, generate_rpd_series
+from tdtools import get_calendar, trans_date, get_last_rpd_date, generate_rpd_series, is_continue_rpd
 from datasource.sqlserver.utils import transform_data, expand_data
 from datasource.sqlserver.jydb.dbengine import jydb
 
@@ -162,30 +164,62 @@ def calc_seasonly_data(data, cols):
     '''
     symbol_col, data_col, update_time_col, rpt_col = cols
     data = data.loc[data[rpt_col].dt.is_quarter_end]    # 剔除可能不规则的数据
+    lrpd_stack = []
+    nrpd_stack = []
     def process_per_symbol(df):
-        # 计算单只证券的季度数据
-        tmp_mod_data = df.loc[df[rpt_col].dt.month != 3]
-        obs_data, flag = expand_data(df, update_time_col, rpt_col, 10)
-        res = []
-        for _, tmp_data in tmp_mod_data.iterrows():
-#             pdb.set_trace()
-            tmp_obs_date, tmp_rpt_date = tmp_data.loc[[update_time_col, rpt_col]]
-            last_rpt_date = generate_rpd_series(tmp_rpt_date, 2)[1]
-            tmp_obs_data = obs_data.loc[obs_data[flag] == tmp_obs_date].\
-                           drop_duplicates(subset=[rpt_col], keep='last').\
-                           set_index(rpt_col).loc[:, data_col]
-            try:
-                tmp_value = tmp_obs_data.loc[tmp_rpt_date] - tmp_obs_data.loc[last_rpt_date]
-            except KeyError:
-                tmp_value = np.nan
-            res.append({rpt_col: tmp_rpt_date, update_time_col: tmp_obs_date, data_col: tmp_value})
-        res = pd.DataFrame(res)
+        rpds = sorted(df[rpt_col].drop_duplicates().tolist())
+        if not is_continue_rpd(rpds):
+            warnings.warn("Discontinuous report date in {}!".format(df[symbol_col].iloc[0]), RuntimeWarning)
+            return pd.DataFrame(columns=[data_col, '__RPT_TAG__', '__UT_TAG__']).set_index(['__RPT_TAG__', '__UT_TAG__'])
+        df = df.sort_values([update_time_col, rpt_col], ascending=True)
+        dates_data = [r[1].to_dict() for r in df.loc[:, [rpt_col, update_time_col]].iterrows()]
+        rpd_pairs = [p for p in zip(rpds, rpds[1:]) if p[1].month != 3]
+        valid_pairs = []
+        # 计算所有报告期组合有效配对
+        for pairs in rpd_pairs:
+            lrpd_stack.clear()
+            nrpd_stack.clear()
+            pair_data = [d for d in dates_data
+                         if d[rpt_col] == pairs[0] or d[rpt_col] == pairs[1]]
+            # 计算当前报告期组的所有有效配对
+            for p in pair_data:
+                if p[rpt_col] == pairs[0]:
+                    pop_stack = nrpd_stack
+                    push_stack = lrpd_stack
+                    idx = 0    # 标记当前数据在结果列表中的位置
+                else:
+                    pop_stack = lrpd_stack
+                    push_stack = nrpd_stack
+                    idx = 1
+                try:
+                    pop_value = pop_stack[0]
+                    if idx == 0:
+                        tmp_res = (p, pop_value,
+                                   {"__RPT_TAG__": pop_value[rpt_col],
+                                    "__UT_TAG__": max(p[update_time_col], pop_value[update_time_col])})
+                    else:
+                        tmp_res = (pop_value, p,
+                                   {"__RPT_TAG__": p[rpt_col],
+                                    "__UT_TAG__": max(p[update_time_col], pop_value[update_time_col])})
+                    # 格式为({rpt_col: rpt1, update_time_col: ut1}(上期), {rpt_col: rpt2, update_time_col: ut2}()本期, {"__RPT_TAG__": rpt3, "__UT_TAG__": ut3}(标记))
+                    valid_pairs.append(tmp_res)
+                except IndexError:
+                    pass
+                finally:
+                    push_stack.append(p)
+        last_df = pd.DataFrame([{**p[0], **p[2]} for p in valid_pairs])
+        next_df = pd.DataFrame([{**p[1], **p[2]} for p in valid_pairs])
+        if len(last_df) == 0:
+            return pd.DataFrame(columns=[data_col, '__RPT_TAG__', '__UT_TAG__']).set_index(['__RPT_TAG__', '__UT_TAG__'])
+        last_df = pd.merge(df, last_df, on=[rpt_col, update_time_col], how='right').set_index(["__RPT_TAG__", "__UT_TAG__"])
+        next_df = pd.merge(df, next_df, on=[rpt_col, update_time_col], how='right').set_index(["__RPT_TAG__", "__UT_TAG__"])
+        res = (next_df.loc[:, [data_col]] - last_df.loc[:, [data_col]])
         return res
-    tqdm.pandas()
-    out = data.groupby(symbol_col).progress_apply(process_per_symbol)
-    out = out.reset_index()
-    out = pd.concat([out, data.loc[data[rpt_col].dt.month == 3]], axis=0)
+    out = data.groupby(symbol_col).apply(process_per_symbol).reset_index().\
+          rename(columns={"__RPT_TAG__": rpt_col, "__UT_TAG__": update_time_col})
+    out = pd.concat([out, data.loc[data[rpt_col].dt.month==3]], axis=0)
     return out
+
 
 def calc_tnm(df, data_col, period_flag_col, nperiod=4):
     '''
