@@ -13,7 +13,8 @@ from functools import wraps
 import datetime as dt
 from itertools import cycle
 
-from pandas import to_datetime
+import pandas as pd
+from numpy import all as np_all
 
 
 def trans_date(*args):
@@ -32,7 +33,7 @@ def trans_date(*args):
     '''
     result = []
     for d in args:
-        d = to_datetime(to_datetime(d).strftime('%Y-%m-%d'))
+        d = pd.to_datetime(pd.to_datetime(d).strftime('%Y-%m-%d'))
         result.append(d)
     if len(result) == 1:
         out = result[0]
@@ -72,7 +73,7 @@ def get_last_rpd_date(dates, findmax=True):
     Parameter
     ---------
     dates: iterable
-        元素为datetime获取其子类
+        元素为datetime或者其子类
     ascending: boolean
         True表示查找最大的报告期，False表示查找最小的报告期
 
@@ -111,3 +112,22 @@ def generate_rpd_series(date, n):
     for i, d in zip(range(-m, -m+n), cycle(od)):
         out.append(dt.datetime.strptime(str(date.year-i//4-1)+'-'+d, '%Y-%m-%d'))
     return out
+
+def is_continue_rpd(dates):
+    """
+    判断给定的时间序列是否为连续的报告期
+
+    Parameter
+    ---------
+    dates: iterable
+        元素为datetime或者其子类，必须为报告期
+
+    Return
+    ------
+    result: boolean
+    """
+    dates = pd.Series(dates).sort_values()
+    if not np_all(dates.dt.is_quarter_end):
+        raise ValueError('None rpd data in parameter "dates"!')
+    continue_dates = pd.date_range(dates.iloc[0], dates.iloc[-1], freq='Q')
+    return len(continue_dates) == len(dates)
