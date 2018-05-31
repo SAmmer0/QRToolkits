@@ -11,11 +11,16 @@ Created: 2018/4/4
 import pyodbc
 import time
 import pdb
+import logging
 
 import pandas as pd
 
 from tdtools import trans_date
+from datasource.const import MAIN_LOGGER_NAME
 
+# --------------------------------------------------------------------------------------------------
+# 设置logger
+logger = logging.getLogger(MAIN_LOGGER_NAME)
 
 # --------------------------------------------------------------------------------------------------
 # 工具函数
@@ -163,6 +168,8 @@ class SQLConnector(object):
             cur = self._conn.cursor()
             cur.execute(sql, *args, **kwargs)
             out = cur.fetchall()
+        except Exception as e:
+            logger.exception(e)
         finally:
             self._conn.close()
         return out

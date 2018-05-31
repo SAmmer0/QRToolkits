@@ -7,7 +7,7 @@ Github: https://github.com/SAmmer0
 Created: 2018/4/9
 """
 import pdb
-import warnings
+import logging
 
 import pandas as pd
 import numpy as np
@@ -17,8 +17,15 @@ from collections import deque
 from tdtools import get_calendar, trans_date, get_last_rpd_date, generate_rpd_series, is_continue_rpd
 from datasource.sqlserver.utils import transform_data, expand_data
 from datasource.sqlserver.jydb.dbengine import jydb
+from datasource.const import MAIN_LOGGER_NAME 
 
 
+# ------------------------------------------------------------------------------------------------------------
+# 设置logger
+logger = logging.getLogger(MAIN_LOGGER_NAME)
+
+# ------------------------------------------------------------------------------------------------------------
+# 功能模块
 def map2td(data, days, timecol=None, from_now_on=True, fillna=None):
     '''
     将(一系列)数据映射到给定的交易日
@@ -169,7 +176,7 @@ def calc_seasonly_data(data, cols):
     def process_per_symbol(df):
         rpds = sorted(df[rpt_col].drop_duplicates().tolist())
         if not is_continue_rpd(rpds):
-            warnings.warn("Discontinuous report date in {}!".format(df[symbol_col].iloc[0]), RuntimeWarning)
+            logger.warning("[Operation=calc_seasonly_data, Info=\"Discontinuous report date in {}!\"]".format(df[symbol_col].iloc[0]))
             return pd.DataFrame(columns=[data_col, '__RPT_TAG__', '__UT_TAG__']).set_index(['__RPT_TAG__', '__UT_TAG__'])
         df = df.sort_values([update_time_col, rpt_col], ascending=True)
         dates_data = [r[1].to_dict() for r in df.loc[:, [rpt_col, update_time_col]].iterrows()]
