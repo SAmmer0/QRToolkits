@@ -11,4 +11,4 @@ from qrtutils import set_logger, parse_config
 
 CONFIG = parse_config(join(dirname(__file__), 'config.json'))
 
-MAIN_LOGGER_NAME = set_logger(CONFIG['log'], __file__, 'DATA_SOURCE_MAIN_LOGGER')
+MAIN_LOGGER_NAME = set_logger(CONFIG['log'], dirname(__file__), 'DATA_SOURCE_MAIN_LOGGER')
