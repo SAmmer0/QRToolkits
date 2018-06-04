@@ -17,7 +17,7 @@ from collections import deque
 from tdtools import get_calendar, trans_date, get_last_rpd_date, generate_rpd_series, is_continue_rpd
 from datasource.sqlserver.utils import transform_data, expand_data
 from datasource.sqlserver.jydb.dbengine import jydb
-from datasource.const import MAIN_LOGGER_NAME 
+from datasource.const import MAIN_LOGGER_NAME
 
 
 # ------------------------------------------------------------------------------------------------------------
