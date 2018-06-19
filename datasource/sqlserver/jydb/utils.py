@@ -36,7 +36,7 @@ def map2td(data, days, timecol=None, from_now_on=True, fillna=None, limit=120):
         待映射的数据，数据中必须包含时间特征(在数据列中或者在index中)
     days: iterable
         元素为需要映射到的目标日序列
-   timecol: string, default None
+    timecol: string, default None
         若数据中包含时间列，则需要提供时间列的列名；该参数为None表示时间包含在index中
     from_now_on: boolean
         映射规则。若from_now_on为True，表示给定时点及其后的值等于该时点的值，直至下一个时点；
