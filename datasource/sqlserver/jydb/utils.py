@@ -26,7 +26,7 @@ logger = logging.getLogger(MAIN_LOGGER_NAME)
 
 # ------------------------------------------------------------------------------------------------------------
 # 功能模块
-def map2td(data, days, timecol=None, from_now_on=True, fillna=None, limit=150):
+def map2td(data, days, timecol=None, from_now_on=True, fillna=None, limit=120):
     '''
     将(一系列)数据映射到给定的交易日
 
@@ -44,7 +44,7 @@ def map2td(data, days, timecol=None, from_now_on=True, fillna=None, limit=150):
     fillna: function, default None
         默认为None表示不对缺省数据做填充；若需要填充，对应的格式为{col: function(data)->value}，
         即填充函数接受原数据作为输入，返回一个填充的值
-    limit: int, default 150
+    limit: int, default 120
         数据映射过程中，往后最大填充数量；即如果当前时间与数据更改时间的间隔(以days的
         索引数为准)超过该参数，往后不继续填充，保持数据为NA值
  
