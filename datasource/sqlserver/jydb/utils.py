@@ -26,7 +26,7 @@ logger = logging.getLogger(MAIN_LOGGER_NAME)
 
 # ------------------------------------------------------------------------------------------------------------
 # 功能模块
-def map2td(data, days, limit=120, timecol=None, from_now_on=True, fillna=None):
+def map2td(data, days, timecol=None, from_now_on=True, fillna=None, limit=120):
     '''
     将(一系列)数据映射到给定的交易日
 
@@ -36,10 +36,7 @@ def map2td(data, days, limit=120, timecol=None, from_now_on=True, fillna=None):
         待映射的数据，数据中必须包含时间特征(在数据列中或者在index中)
     days: iterable
         元素为需要映射到的目标日序列
-    limit: int, default 120
-        数据映射过程中，往后最大填充数量；即如果当前时间与数据更改时间的间隔(以days的
-        索引数为准)超过该参数，往后不继续填充，保持数据为NA值
-    timecol: string, default None
+   timecol: string, default None
         若数据中包含时间列，则需要提供时间列的列名；该参数为None表示时间包含在index中
     from_now_on: boolean
         映射规则。若from_now_on为True，表示给定时点及其后的值等于该时点的值，直至下一个时点；
@@ -47,7 +44,10 @@ def map2td(data, days, limit=120, timecol=None, from_now_on=True, fillna=None):
     fillna: function, default None
         默认为None表示不对缺省数据做填充；若需要填充，对应的格式为{col: function(data)->value}，
         即填充函数接受原数据作为输入，返回一个填充的值
-
+    limit: int, default 120
+        数据映射过程中，往后最大填充数量；即如果当前时间与数据更改时间的间隔(以days的
+        索引数为准)超过该参数，往后不继续填充，保持数据为NA值
+ 
     Return
     ------
     out: pandas.DataFrame
