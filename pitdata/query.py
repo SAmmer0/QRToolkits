@@ -9,6 +9,7 @@ Created: 2018/4/18
 用于处理主要的数据请求
 """
 import logging
+import re
 
 import pandas as pd
 
@@ -85,22 +86,29 @@ def query_group(name_group, start_time, end_time=None):
         out.index = pd.MultiIndex.from_product([datas[0].index, name_group])
         return out
 
-def list_data(nfilter=None):
+def list_data(pattern=None, match_method='simple'):
     '''
     列出当前数据库中的数据名称
 
     Parameter
     ---------
-    nfilter: string, default None
-        名称过滤，None表示不过滤
+    pattern: string, default None
+        过滤模式，None表示不过滤
+    match_method: string, default 'simple'
+        过滤方法，支持['simple'(返回包含pattern参数中字符串的数据名称), 're'(返回匹配pattern中re表达式的数据名称)]
 
     Return
     ------
     out: list
     '''
     out = sorted(get_db_dictionary().keys())
-    if nfilter is not None:
-        out = [n for n in out if nfilter in n]
+    if pattern is not None:
+        if match_method == 'simple':
+            out = [n for n in out if nfilter in n]
+        elif match_method == 're':
+            out = [n for n in out if re.match(pattern, n) is not None]
+        else:
+            raise ValueError('Valid match_method are [simple, re]!')
     return out
 
 def show_all_data():
