@@ -48,7 +48,7 @@ def transform_data(data, colnames, dtypes=None):
     data = pd.DataFrame([dict(zip(colnames, r)) for r in data])
     if dtypes is not None:
         data = data.astype(dtypes)
-    return data
+    return data.reindex(columns=colnames)
 
 
 def fetch_db_data(db, sql, colnames, dtypes=None, sql_kwargs=None):
@@ -72,11 +72,14 @@ def fetch_db_data(db, sql, colnames, dtypes=None, sql_kwargs=None):
 
     Return
     ------
-    out: pandas.DataFrame
+    out: pandas.DataFrame or None
+        当发生错误时返回None，取数据时，代码需要做相关检测
     '''
     if sql_kwargs is not None:
         sql = sql.format(**sql_kwargs)
     data = db.fetchall(sql)
+    if data is None:
+        return None
     data = transform_data(data, colnames, dtypes)
     return data
 
@@ -169,6 +172,7 @@ class SQLConnector(object):
             cur.execute(sql, *args, **kwargs)
             out = cur.fetchall()
         except Exception as e:
+            out = None
             logger.exception(e)
         finally:
             self._conn.close()
