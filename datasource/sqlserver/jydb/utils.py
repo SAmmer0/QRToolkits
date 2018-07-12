@@ -14,7 +14,9 @@ import numpy as np
 from tqdm import tqdm
 from collections import deque
 
-from tdtools import get_calendar, trans_date, get_last_rpd_date, generate_rpd_series, is_continue_rpd
+from tdtools import (get_calendar, trans_date, get_last_rpd_date, 
+                     generate_rpd_series, is_continue_rpd,
+                     generate_rpd_range)
 from datasource.sqlserver.utils import transform_data, expand_data
 from datasource.sqlserver.jydb.dbengine import jydb
 from datasource.const import MAIN_LOGGER_NAME
@@ -178,9 +180,22 @@ def calc_seasonly_data(data, cols):
     nrpd_stack = []
     def process_per_symbol(df):
         rpds = sorted(df[rpt_col].drop_duplicates().tolist())
-        if not is_continue_rpd(rpds):
+        continue_rpd_flag = is_continue_rpd(rpds)
+        if not continue_rpd_flag:
+            # if df.symbol.iloc[0] == '000656':
+            #     pdb.set_trace()
             logger.warning("[Operation=calc_seasonly_data, Info=\"Discontinuous report date in {}!\"]".format(df[symbol_col].iloc[0]))
-            return pd.DataFrame(columns=[data_col, '__RPT_TAG__', '__UT_TAG__']).set_index(['__RPT_TAG__', '__UT_TAG__'])
+            new_rpds = generate_rpd_range(rpds[0], rpds[-1])
+            diff = set(new_rpds).difference(rpds)
+            if len(diff) > df.shape[0]:
+                return pd.DataFrame(columns=[data_col, '__RPT_TAG__', '__UT_TAG__']).set_index(['__RPT_TAG__', '__UT_TAG__'])
+            tmp_df = df.iloc[: len(diff)].copy()
+            tmp_df[data_col] = np.nan
+            tmp_df[rpt_col] = list(diff)
+            tmp_df[update_time_col] = pd.NaT
+            df = df.append(tmp_df)
+            df = df.sort_values([rpt_col, update_time_col], ascending=True)
+            df[update_time_col] = df[update_time_col].fillna(method='bfill')
         df = df.sort_values([update_time_col, rpt_col], ascending=True)
         dates_data = [r[1].to_dict() for r in df.loc[:, [rpt_col, update_time_col]].iterrows()]
         rpd_pairs = [p for p in zip(rpds, rpds[1:]) if p[1].month != 3]
@@ -202,7 +217,7 @@ def calc_seasonly_data(data, cols):
                     push_stack = nrpd_stack
                     idx = 1
                 try:
-                    pop_value = pop_stack[0]
+                    pop_value = pop_stack[-1]
                     if idx == 0:
                         tmp_res = (p, pop_value,
                                    {"__RPT_TAG__": pop_value[rpt_col],
@@ -225,6 +240,8 @@ def calc_seasonly_data(data, cols):
         next_df = pd.merge(df, next_df, on=[rpt_col, update_time_col], how='right').set_index(["__RPT_TAG__", "__UT_TAG__"])
         res = (next_df.loc[:, [data_col]] - last_df.loc[:, [data_col]])
         return res
+    # out = data.groupby(symbol_col).progress_apply(process_per_symbol).reset_index().\
+    #       rename(columns={"__RPT_TAG__": rpt_col, "__UT_TAG__": update_time_col})
     out = data.groupby(symbol_col).apply(process_per_symbol).reset_index().\
           rename(columns={"__RPT_TAG__": rpt_col, "__UT_TAG__": update_time_col})
     out = pd.concat([out, data.loc[data[rpt_col].dt.month==3]], axis=0)
