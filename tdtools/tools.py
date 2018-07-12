@@ -113,6 +113,24 @@ def generate_rpd_series(date, n):
         out.append(dt.datetime.strptime(str(date.year-i//4-1)+'-'+d, '%Y-%m-%d'))
     return out
 
+def generate_rpd_range(start_time, end_time):
+    """
+    生成给定的时间区间内的报告期序列(包含首尾)
+
+    Parameter
+    ---------
+    start_time: datetime like
+        开始时间
+    end_time: datetime like
+        结束时间
+
+    Return
+    ------
+    out: list
+        元素为pandas.TimeStamp类型的报告期，按照升序排列
+    """
+    return sorted(pd.date_range(start_time, end_time, freq='Q'), reverse=False)
+
 def is_continue_rpd(dates):
     """
     判断给定的时间序列是否为连续的报告期

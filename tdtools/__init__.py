@@ -10,4 +10,4 @@ Created: 2018/3/16
 """
 from tdtools.calendarmanager import update_data, get_calendar
 from tdtools.tools import (timeit_wrapper, trans_date, get_last_rpd_date, 
-                           generate_rpd_series, is_continue_rpd)
+                           generate_rpd_series, is_continue_rpd, generate_rpd_range)
