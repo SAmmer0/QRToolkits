@@ -104,7 +104,7 @@ def list_data(pattern=None, match_method='simple'):
     out = sorted(get_db_dictionary().keys())
     if pattern is not None:
         if match_method == 'simple':
-            out = [n for n in out if nfilter in n]
+            out = [n for n in out if pattern in n]
         elif match_method == 're':
             out = [n for n in out if re.match(pattern, n) is not None]
         else:
