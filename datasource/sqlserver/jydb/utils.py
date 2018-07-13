@@ -182,12 +182,12 @@ def calc_seasonly_data(data, cols):
         rpds = sorted(df[rpt_col].drop_duplicates().tolist())
         continue_rpd_flag = is_continue_rpd(rpds)
         if not continue_rpd_flag:
-            # if df.symbol.iloc[0] == '000656':
-            #     pdb.set_trace()
             logger.warning("[Operation=calc_seasonly_data, Info=\"Discontinuous report date in {}!\"]".format(df[symbol_col].iloc[0]))
             new_rpds = generate_rpd_range(rpds[0], rpds[-1])
             diff = set(new_rpds).difference(rpds)
-            if len(diff) > df.shape[0]:
+            if len(diff) > df.shape[0]: 
+                # 存在一些潜在的问题，例如当前股票中途有一段时间没有发布季报，
+                # 并且缺失的季度数比较多，后面又继续发了，仍然会导致整体计算和分开计算的不一致
                 return pd.DataFrame(columns=[data_col, '__RPT_TAG__', '__UT_TAG__']).set_index(['__RPT_TAG__', '__UT_TAG__'])
             tmp_df = df.iloc[: len(diff)].copy()
             tmp_df[data_col] = np.nan
