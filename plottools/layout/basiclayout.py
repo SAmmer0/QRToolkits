@@ -51,6 +51,7 @@ class GridLayoutBase(object):
         Return
         ------
         axes: matplotlib.axes.Axes
+            如果没有下一个图，返回None
         '''
         if self._is_last_row():     # 当前已经为最后一行
             return None
@@ -78,6 +79,7 @@ class GridLayoutBase(object):
         Return
         ------
         axes: matplotlib.axes.Axes
+            如果没有下一个图，返回None
         '''
         if self._is_last_col() or self._current_row is None:
             return None
@@ -104,6 +106,7 @@ class GridLayoutBase(object):
         Return
         ------
         axes: matplotlib.axes.Axes
+            若没有下一个图，返回None
         '''
         if self._current_row is None or self._is_last_col():
             axes = self.get_next_row_head(row_gap, col_gap)
@@ -189,3 +192,34 @@ class GridLayoutBase(object):
         if self._current_col is not None:
             result = self._current_col + self._current_col_gap
         return result
+
+    @property
+    def figure(self):
+        return self._figure
+
+    @property
+    def axes(self):
+        return self._axes
+
+    @property
+    def current_row(self):
+        return self._current_row
+
+    @property
+    def current_col(self):
+        return self._current_col
+
+    @property
+    def nrow(self):
+        return self._total_row_num
+
+    @property
+    def ncol(self):
+        return self._total_col_num
+
+    @property
+    def current_axes(self):
+        if len(self._axes) < 1:
+            return None
+        else:
+            return self._axes[-1]
