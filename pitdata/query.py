@@ -10,6 +10,7 @@ Created: 2018/4/18
 """
 import logging
 import re
+import pdb
 
 import pandas as pd
 
@@ -82,8 +83,9 @@ def query_group(name_group, start_time, end_time=None):
         out.columns = name_group
         return out.T
     else:
-        out = pd.concat(datas, axis=0)
-        out.index = pd.MultiIndex.from_product([datas[0].index, name_group])
+        for d_name, d in zip(name_group, datas):
+            d.index = pd.MultiIndex.from_product([d.index, [d_name]])
+        out = pd.concat(datas, axis=0).sort_index(level=[0, 1])
         return out
 
 def list_data(pattern=None, match_method='simple'):
