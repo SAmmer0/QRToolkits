@@ -26,13 +26,15 @@ class PlotBase(object):
         legend:设置子图legend，格式为function(axes, **kwargs)
         annotate:设置子图标记，格式为function(axes, **kwargs)
         xaxis:设置x轴，格式为function(axis, **kwargs)
+        secondary_xaxis:设置x轴右轴，格式为function(axis, **kwargs)
         yaxis:设置y轴，格式为function(axis, **kwargs)
         others:设置其他属性，格式为function(axis, **kwargs)
     '''
     def __init__(self, axes, callbacks):
         self._axes = axes
         self._callbacks = callbacks
-        self._call_order = ['main_plot', 'xaxis', 'yaxis', 'title', 'legend', 'annotate', 'others']    # 功能调用顺序
+        self._call_order = ['main_plot', 'xaxis', 'secondary_xaxis',
+                            'yaxis', 'title', 'legend', 'annotate', 'others']    # 功能调用顺序
 
     def pset_main_plot(self, callback, **kwargs):
         '''
@@ -64,6 +66,12 @@ class PlotBase(object):
         '''
         callback(self._axes.get_xaxis(), **kwargs)
 
+    def pset_secondary_xaxis(self, callback, **kwargs):
+        '''
+        设置右边x轴
+        '''
+        callback(self._axes.twinx().get_xaxis(), **kwargs)
+
     def pset_yaxis(self, callback, **kwargs):
         '''
         设置y轴
@@ -91,3 +99,4 @@ class PlotBase(object):
 
             handler = getattr(self, 'pset_' + field)
             handler(callback, **kwargs)
+
