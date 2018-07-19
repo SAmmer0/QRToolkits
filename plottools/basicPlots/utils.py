@@ -217,3 +217,84 @@ class HeatMap(PlotComponentBase):
         '''
         cbar = axes.figure.colorbar(im, ax=axes, **kwargs)
         cbar.ax.set_ylabel(label, rotation=-90, va='bottom')
+
+class StackPlot(PlotComponentBase):
+    '''
+    层叠图
+
+    Parameter
+    ---------
+    x: np.array or the like
+        x轴坐标，长度为N
+    y: np.array or the like
+        y轴坐标，为M*N或者一系列N维向量
+    labels: iterable, default None
+        元素为字符串，labels的长度为N
+    colors: iterable, default None
+        元素为matplotlib中可以接受的颜色，colors长度为N，仅通过关键字设置
+    secondary_y: boolean, default False
+        是否适用右轴
+    kwargs: dictionary
+        其他传入到matplotlib.axes.Axes.stackplot中的参数，仅通过关键字设置
+    '''
+    def __init__(self, x, *y, labels=None, colors=None, secondary_y=False, **kwargs):
+        self._x = x
+        self._y = y
+        self._kwargs = kwargs
+        if labels is not None:
+            self._kwargs.update(labels=labels)
+        if colors is not None:
+            self._kwargs.update(colors=colors)
+        self._secondary_y = secondary_y
+
+    def __call__(self, axes):
+        if self._secondary_y:
+            axes = axes.twinx()
+        axes.stackplot(self._x, *self._y, **self._kwargs)
+
+class ScatterPlot(PlotComponentBase):
+    '''
+    散点图
+
+    Parameter
+    ---------
+    x: np.array or the like
+        x轴坐标
+    y: np.array or the like, default None
+        y轴坐标，None表示x参数作为y轴坐标，x轴坐标为np.arange(0, len(x))
+    secondary_y: boolean, default False
+        是否适用右轴
+    kwargs: dictionary
+        其他传入到matplotlib.axes.Axes.scatter中的参数
+    '''
+    def __init__(self, x, y=None, secondary_y=False, **kwargs):
+        if y is None:
+            self._y = x
+            self._x = np.arange(len(x))
+        else:
+            self._x = x
+            self._y = y
+        self._secondary_y = secondary_y
+        self._kwargs = kwargs
+
+    def __call__(self, axes):
+        if self._secondary_y:
+            axes = axes.twinx()
+        axes.scatter(self._x, self._y, **self._kwargs)
+
+
+class CompositePlots(PlotComponentBase):
+    '''
+    合成图类，用于结合其他绘图组件，生成综合性图片
+
+    Parameter
+    ---------
+    plot_components: iterable
+        元素为PlotComponentsBase的子类的实例
+    '''
+    def __init__(self, *plot_components):
+        self._plot_components = plot_components
+
+    def __call__(self, axes):
+        for plot_kit in self._plot_components:
+            plot_kit(axes)
