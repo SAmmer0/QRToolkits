@@ -7,7 +7,9 @@ Github: https://github.com/SAmmer0
 Created: 2018/7/17
 """
 import numpy as np
+
 from plottools.basicPlots.mpl_finance import candlestick2_ohlc
+from plottools.basicPlots.const import HT_FONT
 
 class PlotComponentBase(object):
     '''
@@ -28,6 +30,8 @@ class PlotComponentBase(object):
         '''
         pass
 
+# --------------------------------------------------------------------------------------------------
+# 绘图部分
 class LinePlot(PlotComponentBase):
     '''
     单线条绘制类
@@ -298,3 +302,38 @@ class CompositePlots(PlotComponentBase):
     def __call__(self, axes):
         for plot_kit in self._plot_components:
             plot_kit(axes)
+
+# --------------------------------------------------------------------------------------------------
+# title部分
+class TitleComponent(PlotComponentBase):
+    '''
+    绘图过程中的标题组件
+
+    Parameter
+    ---------
+    text: string
+        标题内容
+    font_properties: matplotlib.font_manager.FontProperties, default HT_FONT
+        主要用于设置字体
+    font_size: int or string, default None
+        用于设置字体大小
+        之所以把fontproperties和fontsize单独提取出来是因为
+        两个参数在axes.set_title中的顺序会影响到最终的效果，只有
+        当fontproperties在fontsize前时，修改字体大小的操作才会
+        有效
+    kwargs: dictionary
+        除上述两个关键字外，其他需要传入到axes.set_title中的参数
+    '''
+    def __init__(self, text, font_properties=HT_FONT, font_size=None, **kwargs):
+        self._text = text
+        # 这种解决方式可能仍然存在问题，但是目前能够使用
+        self._font_kwargs = {}
+        if font_properties is not None:
+            self._font_kwargs.update(fontproperties=font_properties)
+        if font_size is not None:
+            self._font_kwargs.update(fontsize=font_size)
+        self._kwargs = kwargs
+
+    def __call__(self, axes):
+        axes.set_title(self._text, **self._font_kwargs, **self._kwargs)
+
