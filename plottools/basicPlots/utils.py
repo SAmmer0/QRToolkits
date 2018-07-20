@@ -6,7 +6,9 @@ Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/7/17
 """
+import pdb
 import numpy as np
+from matplotlib.pyplot import setp
 
 from plottools.basicPlots.mpl_finance import candlestick2_ohlc
 from plottools.basicPlots.const import HT_FONT
@@ -326,14 +328,219 @@ class TitleComponent(PlotComponentBase):
     '''
     def __init__(self, text, font_properties=HT_FONT, font_size=None, **kwargs):
         self._text = text
-        # 这种解决方式可能仍然存在问题，但是目前能够使用
-        self._font_kwargs = {}
-        if font_properties is not None:
-            self._font_kwargs.update(fontproperties=font_properties)
+        # 使用深复制FontProperties对象保证对字体大小的修改
+        self._font_properties = font_properties
         if font_size is not None:
-            self._font_kwargs.update(fontsize=font_size)
+            self._font_properties = self._font_properties.copy()
+            self._font_properties.set_size(font_size)
         self._kwargs = kwargs
 
     def __call__(self, axes):
-        axes.set_title(self._text, **self._font_kwargs, **self._kwargs)
+        axes.set_title(self._text, fontproperties=self._font_properties, **self._kwargs)
 
+# --------------------------------------------------------------------------------------------------
+# legend
+class LegendComponent(PlotComponentBase):
+    '''
+    仅一个简单的legend开关，因为legend需要与line等对象配合使用，使用handler和label的机制
+    会导致相关功能和设计的复杂化，因此暂时不采用这种设计
+    使用该组件，要求在各种plot中设置label参数
+
+    Parameter
+    ---------
+    loc: string, default 'upper right'
+        legend所在的位置
+    font_properties: matplotlib.font_manager.FontProperties, default HT_FONT
+        字体设置
+    font_size: int, default None
+        字体大小
+    kwargs: dictionary
+        其他传入到axes.legend的参数
+    '''
+    def __init__(self, loc='upper right', font_properties=HT_FONT, font_size=None, **kwargs):
+        self._loc = loc
+        self._font_properties = font_properties
+        if font_size is not None:
+            self._font_properties = self._font_properties.copy()
+            self._font_properties.set_size(font_size)
+        self._kwargs = kwargs
+
+    def __call__(self, axes):
+        axes.legend(loc=self._loc, prop=self._font_properties, **self._kwargs)
+
+# --------------------------------------------------------------------------------------------------
+# annotate
+class AnnotateComponent(PlotComponentBase):
+    '''
+    注解工具
+
+    Parameter
+    ---------
+    text: string
+        注解内容
+    xy: iterable
+        指向的坐标，必须是二维
+    font_properties: matplotlib.font_manager.FontProperties, default HT_FONT
+        字体设置
+    font_size: int, default None
+        字体大小设置
+    xytext: iterable, optional, default None
+        注解文字所在的坐标，必须是二维，默认为xy
+    xycoords: string, Artist and the like, optional, default None
+        指向坐标系单位，详见https://matplotlib.org/api/_as_gen/matplotlib.axes.Axes.annotate.html#matplotlib.axes.Axes.annotate
+    textcoords: string, Artist and the like, optional, default None
+        注解文字坐标系单位
+    arrowprop: dictionary, optional, default None
+        箭头设置属性
+    annotation_clip: boolean, optional, default None
+        注解是否可见，如果为True，则只有当xy在axes范围内时才可见；反之，任何条件下均可见
+    kwargs: dictionary
+        其他传入到Text中的参数
+    '''
+    def __init__(self, text, xy, font_properties=HT_FONT, font_size=None, xytext=None,
+                 xycoords=None, textcoords=None, arrowprops=None, annotation_clip=None,
+                 **kwargs):
+        self._text = text
+        self._xy = xy
+        self._font_properties = font_properties
+        if font_size is not None:
+            self._font_properties = self._font_properties.copy()
+            self._font_properties.set_size(font_size)
+        self._annotate_kwargs = self._set_annotate_kwargs(xytext=xytext, xycoords=xycoords,
+                                                          textcoords=textcoords, arrowprops=arrowprops,
+                                                          annotation_clip=annotation_clip)
+        self._kwargs = kwargs
+
+    def __call__(self, axes):
+        axes.annotate(self._text, self._xy, fontproperties=self._font_properties, **self._annotate_kwargs,
+                      **self._kwargs)
+
+    def _set_annotate_kwargs(self, **kwargs):
+        '''
+        将要传入到axes.annotate中的相关参数进行更新
+        更新的规则如下：
+        如果kwargs中的值为None，则不添加到annotate_kwargs中，如果为非None
+        则直接在annotate_kwargs中进行更新
+
+        Parameter
+        ---------
+        kwargs: dictionary
+            参数的具体设置
+
+        Return
+        ------
+        annotate_kwargs: dictionary
+        '''
+        result = {k: kwargs[k] for k in kwargs if kwargs[k] is not None}
+        return result
+
+# --------------------------------------------------------------------------------------------------
+# Axis
+class AxisComponent(PlotComponentBase):
+    '''
+    坐标轴处理类
+    主要用于处理坐标轴的范围、坐标轴的label、坐标标示等
+    内部完全采用set_ticks和set_ticklabels来实现
+
+    Parameter
+    ---------
+    tick_data: iterable
+        刻度数据，一般为数据x轴
+    major_tick_locator: function(data, pos)->boolean
+        主刻度定位函数
+    major_tick_formatter: function(data, pos)->string
+        主刻度标签格式化函数
+    minor_tick_locator: function(data, pos)->boolean, default None
+        副刻度定位函数，None表示不启用副刻度，副刻度不提供标签
+    ticklabel_font: matplotlib.font_manager.FontProperties, default HT_FONT
+        刻度字体
+    ticklabel_fontsize: int, default None
+        刻度字体大小
+    ticklabel_kwargs: dictionary, default None
+        其他刻度设置，用于传入到axis.set_ticklabels
+    label_text: string, default None
+        轴的标签
+    label_font: matplotlib.font_manager.FontProperties, default HT_FONT
+        轴标签的字体
+    label_fontsize: int, default None
+        轴标签的字体大小
+    label_kwargs: dictionary, default None
+        其他轴标签设置，用于传入到axis.set_label_text
+    enable_grid: boolean, default False
+        是否启用grid
+    grid_kwargs: dictionary, default None
+        其他传入axis.grid中的参数
+    '''
+    def __init__(self, tick_data, major_tick_locator, major_tick_formatter, minor_tick_locator=None,
+                 ticklabel_font=HT_FONT, ticklabel_fontsize=None, ticklabel_kwargs=None,
+                 label_text=None, label_font=HT_FONT, label_fontsize=None, label_kwargs=None, enable_grid=False,
+                 grid_kwargs=None):
+        self._tick_data = tick_data
+
+        self._major_tick_locator = major_tick_locator
+        self._major_tick_formatter = major_tick_formatter
+        self._minor_tick_locator = minor_tick_locator
+        self._minor_tick_formatter = lambda x, pos: ''  # 副刻度不显示
+
+        self._ticklabel_fontproperties = ticklabel_font
+        if ticklabel_fontsize is not None:
+            self._ticklabel_fontproperties = self._ticklabel_fontproperties.copy()
+            self._ticklabel_fontproperties.set_size(ticklabel_fontsize)
+        if ticklabel_kwargs is None:
+            self._ticklabel_kwargs = {}
+        else:
+            self._ticklabel_kwargs = ticklabel_kwargs
+
+        self._label_text = label_text
+        self._label_fontproperties = label_font
+        if label_fontsize is not None:
+            self._label_fontproperties = self._label_fontproperties.copy()
+            self._label_fontproperties.set_size(label_fontsize)
+        if label_kwargs is None:
+            self._label_kwargs = {}
+        else:
+            self._label_kwargs = label_kwargs
+
+        self._endable_grid = enable_grid
+        if grid_kwargs is None:
+            self._grid_kwargs = {}
+        else:
+            self._grid_kwargs = grid_kwargs
+
+
+    def _set_tick(self, axis, minor=False):
+        '''
+        设置刻度轴，涉及刻度轴定位和标签格式
+
+        Parameter
+        ---------
+        axis: matplot.axis.Axis
+            需要修改的坐标轴对象
+        minor: boolean
+            是否设置副刻度轴
+        '''
+        if minor:
+            tick_type = 'minor'
+        else:
+            tick_type = 'major'
+        locator_func = getattr(self, '_{}_tick_locator'.format(tick_type))
+        formatter_func = getattr(self, '_{}_tick_formatter'.format(tick_type))
+        valid_labels = [(x, formatter_func(x, i))
+                         for i, x in enumerate(self._tick_data)
+                         if locator_func(x, i)]
+        pos, labels = zip(*valid_labels)
+        axis.set_ticks(pos, minor=minor)
+        if not minor:
+            axis.set_ticklabels(labels, minor=False, fontproperties=self._ticklabel_fontproperties,
+                                **self._ticklabel_kwargs)
+
+    def __call__(self, axis):
+        self._set_tick(axis, False)
+        if self._minor_tick_locator is not None:
+            self._set_tick(axis, True)
+        # 设置轴标签
+        if self._label_text is not None:
+            axis.set_label_text(self._label_text, fontproperties=self._label_fontproperties,
+                                **self._label_kwargs)
+        # 设置grid
+        axis.grid(self._endable_grid, **self._grid_kwargs)
