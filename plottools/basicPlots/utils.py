@@ -444,14 +444,12 @@ class AxisComponent(PlotComponentBase):
 
     Parameter
     ---------
-    tick_data: iterable
-        刻度数据，一般为数据x轴
-    major_tick_locator: function(data, pos)->boolean
-        主刻度定位函数
-    major_tick_formatter: function(data, pos)->string
-        主刻度标签格式化函数
-    minor_tick_locator: function(data, pos)->boolean, default None
-        副刻度定位函数，None表示不启用副刻度，副刻度不提供标签
+    major_tick_pos: iterable
+        主刻度的位置
+    major_tick_labels: iterable
+        主刻度标签，长度与major_tick_pos一致
+    minor_tick_pos: iterable, default None
+        副刻度的位置
     ticklabel_font: matplotlib.font_manager.FontProperties, default HT_FONT
         刻度字体
     ticklabel_fontsize: int, default None
@@ -471,16 +469,17 @@ class AxisComponent(PlotComponentBase):
     grid_kwargs: dictionary, default None
         其他传入axis.grid中的参数
     '''
-    def __init__(self, tick_data, major_tick_locator, major_tick_formatter, minor_tick_locator=None,
+    def __init__(self, major_tick_pos, major_tick_labels, minor_tick_pos=None,
                  ticklabel_font=HT_FONT, ticklabel_fontsize=None, ticklabel_kwargs=None,
                  label_text=None, label_font=HT_FONT, label_fontsize=None, label_kwargs=None, enable_grid=False,
                  grid_kwargs=None):
-        self._tick_data = tick_data
-
-        self._major_tick_locator = major_tick_locator
-        self._major_tick_formatter = major_tick_formatter
-        self._minor_tick_locator = minor_tick_locator
-        self._minor_tick_formatter = lambda x, pos: ''  # 副刻度不显示
+        self._major_tick_pos = major_tick_pos
+        self._major_tick_labels = major_tick_labels
+        self._minor_tick_pos = minor_tick_pos
+        if self._minor_tick_pos is not None:
+            self._minor_tick_labels = ['' for dummy_i in range(len(self._minor_tick_pos))]
+        else:
+            self._minor_tick_labels = None
 
         self._ticklabel_fontproperties = ticklabel_font
         if ticklabel_fontsize is not None:
@@ -520,15 +519,13 @@ class AxisComponent(PlotComponentBase):
             是否设置副刻度轴
         '''
         if minor:
+            if self._minor_tick_pos is None:
+                raise ValueError('Minor tick is not specified!')
             tick_type = 'minor'
         else:
             tick_type = 'major'
-        locator_func = getattr(self, '_{}_tick_locator'.format(tick_type))
-        formatter_func = getattr(self, '_{}_tick_formatter'.format(tick_type))
-        valid_labels = [(x, formatter_func(x, i))
-                         for i, x in enumerate(self._tick_data)
-                         if locator_func(x, i)]
-        pos, labels = zip(*valid_labels)
+        pos = getattr(self, '_{}_tick_pos'.format(tick_type))
+        labels = getattr(self, '_{}_tick_labels'.format(tick_type))
         axis.set_ticks(pos, minor=minor)
         if not minor:
             axis.set_ticklabels(labels, minor=False, fontproperties=self._ticklabel_fontproperties,
@@ -536,7 +533,7 @@ class AxisComponent(PlotComponentBase):
 
     def __call__(self, axis):
         self._set_tick(axis, False)
-        if self._minor_tick_locator is not None:
+        if self._minor_tick_pos is not None:
             self._set_tick(axis, True)
         # 设置轴标签
         if self._label_text is not None:

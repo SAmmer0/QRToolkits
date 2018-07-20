@@ -21,11 +21,11 @@ def main_tester(test_func):
 
 def axis_test(axes):
     lp = LinePlot(np.random.rand(100))
-    ac = AxisComponent(np.arange(101), lambda x, pos: x % 20 == 0, lambda x, pos: str(x),
-                       lambda x, pos: x % 5 == 0, label_text='测试', label_fontsize=20, grid_kwargs={'which': 'minor'},
+    xtick = range(0, 101, 10)
+    ac = AxisComponent(xtick, [str(i) for i in xtick], label_text='测试', label_fontsize=20, grid_kwargs={'which': 'minor'},
                        enable_grid=True, ticklabel_fontsize=15, ticklabel_font=font_manager.FontProperties(fname=r'C:\Windows\Fonts\consola.ttf'))
-    yac = AxisComponent(np.linspace(0, 1, 101), lambda x, pos: isclose((1000*x) % 100 , 0, abs_tol=1e-5), lambda x, pos: '{:0.2f}'.format(x),
-                        enable_grid=True)
+    ytick = np.arange(0, 1.1, 0.1)
+    yac = AxisComponent(ytick, ['{:0.2f}'.format(i) for i in ytick], enable_grid=True)
     lp(axes)
     ac(axes.xaxis)
     yac(axes.yaxis)
