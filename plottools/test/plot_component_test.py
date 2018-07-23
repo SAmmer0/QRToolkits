@@ -8,15 +8,16 @@ Created: 2018/7/20
 """
 from math import isclose
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
-from plottools.basicPlots.utils import (AxisComponent,
-                                        LinePlot)
+from plottools.basicPlots.utils import *
+from plottools.basicPlots.generalplots import WrappedTwinAxes
 
 def main_tester(test_func):
     # test_func格式为：test_func(axes)
     fig = plt.figure()
-    axes = fig.add_subplot(111)
+    axes = WrappedTwinAxes(fig.add_subplot(111))
     test_func(axes)
 
 def axis_test(axes):
@@ -30,5 +31,15 @@ def axis_test(axes):
     ac(axes.xaxis)
     yac(axes.yaxis)
 
+def barplot_test(axes):
+    dates = pd.date_range('2018-01-01', periods=10)
+    pos, labels = date_ticker(dates, lambda x: True)
+    bp = secondary_axis_wrapper('x')(BarPlot(np.random.rand(10)))
+    ac = AxisComponent(pos, labels, ticklabel_kwargs={'rotation': 90})
+    als = secondary_axis_wrapper('x')(AxisLimitSetter(0, 1, 'y'))
+    als(axes)
+    bp(axes)
+    ac(axes.xaxis)
+
 if __name__ == '__main__':
-    main_tester(axis_test)
+    main_tester(barplot_test)
