@@ -23,14 +23,14 @@ class WrappedTwinAxes(object):
 
     def twinx(self):
         if 'x' not in self._second_axes:
-            second_axes = self._axes.twinx()
+            second_axes = WrappedTwinAxes(self._axes.twinx())
             self._second_axes['x'] = second_axes
             return second_axes
         else:
             return self._second_axes['x']
     def twiny(self):
         if 'y' not in self._second_axes:
-            second_axes = self._axes.twiny()
+            second_axes = WrappedTwinAxes(self._axes.twiny())
             self._second_axes['y'] = second_axes
             return second_axes
         else:
