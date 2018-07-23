@@ -6,7 +6,9 @@ Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/7/17
 """
+
 import pdb
+from functools import wraps
 import numpy as np
 from matplotlib.pyplot import setp
 
@@ -570,3 +572,86 @@ def num_multiple_ticker(vmin, vmax, base, formatter):
     pos = vmin + np.arange(n) * base
     labels = [formatter.format(x) for x in pos]
     return pos, labels
+
+def date_ticker(dates, locator, formatter='{:%Y-%m-%d}', add_header=True, add_tail=False):
+    '''
+    生成给定日期序列的刻度位置及标签
+
+    Parameter
+    ---------
+    dates: iterable
+        元素为datetime及其子类
+    locator: function(date)->boolean
+        返回True表示以该点为刻度
+    formatter: string, default '{:%Y-%m-%d}'
+        使用formatter.format(date)获取对应刻度的标签
+    add_header: boolean, default True
+        是否加入第一个日期
+    add_tail: boolean, default False
+        是否加入最后一个日期
+
+    Return
+    ------
+    pos: list
+        刻度位置，元素为int
+    labels: list
+        刻度标签，元素为string
+    '''
+    pos = [i for i, d in enumerate(dates) if locator(d)]
+    if add_header and 0 not in pos:
+        pos = [0] + pos
+    last_pos = len(dates) - 1
+    if add_tail and last_pos not in pos:
+        pos.append(last_pos)
+    labels = [formatter.format(dates[i]) for i in pos]
+    return pos, labels
+
+# --------------------------------------------------------------------------------------------------
+# 其他组件
+class AxisLimitSetter(PlotComponentBase):
+    '''
+    用于设置坐标轴的范围
+
+    Parameter
+    ---------
+    vmin: float
+        坐标轴最小值
+    vmax: float
+        坐标轴最大值
+    axis_name: string
+        设置的坐标轴名称，默认为x，仅可以为[x, y]
+
+    Notes
+    -----
+    参数输入的顺序无关
+    '''
+    def __init__(self, vmin, vmax, axis_name='x'):
+        if vmin > vmax:
+            self._limit = (vmin, vmax)
+        else:
+            self._limit = (vmax, vmin)
+        valid_axises = ['x', 'y']
+        if axis_name not in valid_axises:
+            raise ValueError('Invalid axis name(you provide {yp}, valids are {v}).'.
+                             format(yp=axis_name, v=valid_axises))
+        self._setter_func = 'set_{}lim'.format(axis_name)
+
+    def __call__(self, axes):
+        getattr(axes, self._setter_func)(self._limit)
+
+# --------------------------------------------------------------------------------------------------
+# 其他工具
+def secondary_axis_wrapper(axis_type):
+    '''
+    axis_type: string
+        轴的类型，仅支持[x, y]
+    '''
+    def wrapper(func):
+        @wraps(func)
+        def inner(axes, *args, **kwargs):
+            axes = getattr(axes, 'twin{}'.format(axis_type))()
+            result = func(axes, *args, **kwargs)
+            return result
+        return inner
+    return wrapper
+
