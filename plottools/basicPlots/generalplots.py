@@ -7,6 +7,39 @@ Github: https://github.com/SAmmer0
 Created: 2018/7/16
 """
 
+class WrappedTwinAxes(object):
+    '''
+    未解决axes.twinx或者axes.twiny在每次调用时都生成一个不同的对象的问题，
+    对axes进行包装，以保证twin?返回对象的唯一性
+
+    Parameter
+    ---------
+    axes: matplotlib.axes.Axes
+        子图
+    '''
+    def __init__(self, axes):
+        self._axes = axes
+        self._second_axes = {}
+
+    def twinx(self):
+        if 'x' not in self._second_axes:
+            second_axes = self._axes.twinx()
+            self._second_axes['x'] = second_axes
+            return second_axes
+        else:
+            return self._second_axes['x']
+    def twiny(self):
+        if 'y' not in self._second_axes:
+            second_axes = self._axes.twiny()
+            self._second_axes['y'] = second_axes
+            return second_axes
+        else:
+            return self._second_axes['y']
+
+    def __getattr__(self, item):
+        return getattr(self._axes, item)
+
+
 class PlotBase(object):
     '''
     子图绘制基类
@@ -30,7 +63,8 @@ class PlotBase(object):
         others:设置其他属性，格式为function(axis)
     '''
     def __init__(self, axes, callbacks):
-        self._axes = axes
+        self._axes = WrappedTwinAxes(axes)
+        self._second_axis = None
         self._callbacks = callbacks
         self._call_order = ['main_plot', 'xaxis', 'secondary_xaxis',
                             'yaxis', 'title', 'legend', 'annotate', 'others']    # 功能调用顺序
