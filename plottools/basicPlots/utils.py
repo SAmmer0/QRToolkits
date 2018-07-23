@@ -541,3 +541,32 @@ class AxisComponent(PlotComponentBase):
                                 **self._label_kwargs)
         # 设置grid
         axis.grid(self._endable_grid, **self._grid_kwargs)
+
+def num_multiple_ticker(vmin, vmax, base, formatter):
+    '''
+    生成处于给定数据区间，且是某个数据倍数的刻度位置及标签
+
+    Parameter
+    ---------
+    vmin: float
+        下边界
+    vmax: float
+        上边界
+    base: float
+        基数
+    formatter: string
+        使用formatter.format(x)获取标签
+
+    Return
+    ------
+    pos: list
+        刻度位置
+    labels: list
+        刻度标签
+    '''
+    vmin = vmin // base * base
+    vmax = (vmax // base + 1) * base
+    n = (vmax - vmin) // base + 1
+    pos = vmin + np.arange(n) * base
+    labels = [formatter.format(x) for x in pos]
+    return pos, labels
