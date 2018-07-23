@@ -47,19 +47,16 @@ class LinePlot(PlotComponentBase):
         轴数据为range(0, len(x))，如果y参数部位None，则表示x轴数据
     y: numpy.array or the like, default None
         y轴数据，必须有shape属性
-    secondary_y: bool, default False
-        用于标识数据的y轴是否对应于右轴(默认对应于左轴)
     kwargs: dictionary
         用于传入matplot.axes.Axes.plot的其他参数
     '''
-    def __init__(self, x, y=None, secondary_y=False, **kwargs):
+    def __init__(self, x, y=None, **kwargs):
         if y is None:
             self._x = np.arange(len(x))
             self._y = x
         else:
             self._x = x
             self._y = y
-        self._secondary_y = secondary_y
         self._kwargs = kwargs
 
     def __call__(self, axes):
@@ -71,8 +68,6 @@ class LinePlot(PlotComponentBase):
         axes: matplotlib.axes.Axes
             需要绘制的子图
         '''
-        if self._secondary_y:
-            axes = axes.twinx()
         axes.plot(self._x, self._y, **self._kwargs)
 
 class BarPlot(PlotComponentBase):
@@ -81,30 +76,28 @@ class BarPlot(PlotComponentBase):
 
     Parameter
     ---------
-    x: np.array
-        标签的位置
     data: np.array or the like
         每个标签对应的数据的高度
+    x: np.array, default None
+        标签的位置，如果为None，则自动生成为numpy.arange(len(data))
     vertical: boolean, default True
         是否为纵向条形图，如果为False，将绘制横向条形图
-    secondary_y: boolean, default False
-        是否绘制在右轴
     kwargs: dictionary
         其他需要传入到bar或者barh中的参数
     '''
-    def __init__(self, x, data, vertical=True, secondary_y=False, **kwargs):
-        self._x = x
+    def __init__(self, data, x=None, vertical=True, **kwargs):
+        if x is None:
+            self._x = np.arange(len(data))
+        else:
+            self._x = x
         self._data = data
         if vertical:
             self._func_name = 'bar'
         else:
             self._func_name = 'barh'
-        self._secondary_y = secondary_y
         self._kwargs = kwargs
 
     def __call__(self, axes):
-        if self._secondary_y:
-            axes = axes.twinx()
         plot_func = getattr(axes, self._func_name)
         plot_func(self._x, self._data, **self._kwargs)
 
@@ -130,22 +123,16 @@ class KLinePlot(PlotComponentBase):
         k线透明度
     width: float, default 0.5
         k线宽度
-    secondary_y: boolean, False
-        是否适用右轴
     '''
     def __init__(self, open_price, close_price, high_price, low_price,
-                 color_up='red', color_down='green', alpha=.75, width=0.5,
-                 secondary_y=False):
+                 color_up='red', color_down='green', alpha=.75, width=0.5):
         self._data = (open_price, high_price, low_price, close_price)
         self._color_up = color_up
         self._color_down = color_down
-        self._secondary_y = secondary_y
         self._alpha = alpha
         self._width = width
 
     def __call__(self, axes):
-        if self._secondary_y:
-            axes = axes.twinx()
         candlestick2_ohlc(axes, *self._data, colorup=self._color_up,
                           colordown=self._color_down, alpha=self._alpha,
                           width=self._width)
@@ -160,20 +147,15 @@ class HistPlot(PlotComponentBase):
         绘制数据
     bins: int
         区间数
-    secondary_y: boolean, default False
-        是否适用右轴
     **kwargs: dictionary
         其他传入到hist中的参数
     '''
-    def __init__(self, data, bins, secondary_y=False, **kwargs):
+    def __init__(self, data, bins, **kwargs):
         self._data = data
         self._bins = bins
-        self._secondary_y = secondary_y
         self._kwargs = kwargs
 
     def __call__(self, axes):
-        if self._secondary_y:
-            axes = axes.twinx()
         axes.hist(self._data, self._bins, **self._kwargs)
 
 class HeatMap(PlotComponentBase):
@@ -240,12 +222,10 @@ class StackPlot(PlotComponentBase):
         元素为字符串，labels的长度为N
     colors: iterable, default None
         元素为matplotlib中可以接受的颜色，colors长度为N，仅通过关键字设置
-    secondary_y: boolean, default False
-        是否适用右轴
     kwargs: dictionary
         其他传入到matplotlib.axes.Axes.stackplot中的参数，仅通过关键字设置
     '''
-    def __init__(self, x, *y, labels=None, colors=None, secondary_y=False, **kwargs):
+    def __init__(self, x, *y, labels=None, colors=None, **kwargs):
         self._x = x
         self._y = y
         self._kwargs = kwargs
@@ -253,11 +233,8 @@ class StackPlot(PlotComponentBase):
             self._kwargs.update(labels=labels)
         if colors is not None:
             self._kwargs.update(colors=colors)
-        self._secondary_y = secondary_y
 
     def __call__(self, axes):
-        if self._secondary_y:
-            axes = axes.twinx()
         axes.stackplot(self._x, *self._y, **self._kwargs)
 
 class ScatterPlot(PlotComponentBase):
@@ -270,24 +247,19 @@ class ScatterPlot(PlotComponentBase):
         x轴坐标
     y: np.array or the like, default None
         y轴坐标，None表示x参数作为y轴坐标，x轴坐标为np.arange(0, len(x))
-    secondary_y: boolean, default False
-        是否适用右轴
     kwargs: dictionary
         其他传入到matplotlib.axes.Axes.scatter中的参数
     '''
-    def __init__(self, x, y=None, secondary_y=False, **kwargs):
+    def __init__(self, x, y=None, **kwargs):
         if y is None:
             self._y = x
             self._x = np.arange(len(x))
         else:
             self._x = x
             self._y = y
-        self._secondary_y = secondary_y
         self._kwargs = kwargs
 
     def __call__(self, axes):
-        if self._secondary_y:
-            axes = axes.twinx()
         axes.scatter(self._x, self._y, **self._kwargs)
 
 
@@ -627,9 +599,9 @@ class AxisLimitSetter(PlotComponentBase):
     '''
     def __init__(self, vmin, vmax, axis_name='x'):
         if vmin > vmax:
-            self._limit = (vmin, vmax)
-        else:
             self._limit = (vmax, vmin)
+        else:
+            self._limit = (vmin, vmax)
         valid_axises = ['x', 'y']
         if axis_name not in valid_axises:
             raise ValueError('Invalid axis name(you provide {yp}, valids are {v}).'.
@@ -644,7 +616,7 @@ class AxisLimitSetter(PlotComponentBase):
 def secondary_axis_wrapper(axis_type):
     '''
     axis_type: string
-        轴的类型，仅支持[x, y]
+        共享轴的类型，仅支持[x, y]
     '''
     def wrapper(func):
         @wraps(func)
