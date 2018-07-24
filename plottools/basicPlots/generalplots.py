@@ -9,7 +9,7 @@ Created: 2018/7/16
 
 class WrappedTwinAxes(object):
     '''
-    未解决axes.twinx或者axes.twiny在每次调用时都生成一个不同的对象的问题，
+    为解决axes.twinx或者axes.twiny在每次调用时都生成一个不同的对象的问题，
     对axes进行包装，以保证twin?返回对象的唯一性
 
     Parameter
@@ -40,7 +40,7 @@ class WrappedTwinAxes(object):
         return getattr(self._axes, item)
 
 
-class PlotBase(object):
+class PlotFramework(object):
     '''
     子图绘制基类
     通过以下提供的接口进行设置
@@ -58,7 +58,7 @@ class PlotBase(object):
         legend:设置子图legend，格式为function(axes)
         annotate:设置子图标记，格式为function(axes)
         xaxis:设置x轴，格式为function(axis)
-        secondary_xaxis:设置x轴右轴，格式为function(axis)
+        secondary_yaxis:设置y轴右轴，格式为function(axis)
         yaxis:设置y轴，格式为function(axis)
         others:设置其他属性，格式为function(axis)
     '''
@@ -99,9 +99,9 @@ class PlotBase(object):
         '''
         callback(self._axes.get_xaxis())
 
-    def pset_secondary_xaxis(self, callback):
+    def pset_secondary_yaxis(self, callback):
         '''
-        设置右边x轴
+        设置右边y轴
         '''
         callback(self._axes.twinx().get_xaxis())
 
@@ -127,4 +127,5 @@ class PlotBase(object):
                 continue
             handler = getattr(self, 'pset_' + field)
             handler(callback)
+        return self._axes
 
