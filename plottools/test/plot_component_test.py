@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
-from plottools.basicPlots.utils import *
+from plottools.basicPlots.components import *
 from plottools.basicPlots.generalplots import WrappedTwinAxes
 
 def main_tester(test_func):
