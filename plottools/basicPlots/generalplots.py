@@ -66,7 +66,7 @@ class PlotFramework(object):
         self._axes = WrappedTwinAxes(axes)
         self._second_axis = None
         self._callbacks = callbacks
-        self._call_order = ['main_plot', 'xaxis', 'secondary_xaxis',
+        self._call_order = ['main_plot', 'xaxis', 'secondary_yaxis',
                             'yaxis', 'title', 'legend', 'annotate', 'others']    # 功能调用顺序
 
     def pset_main_plot(self, callback):
@@ -103,7 +103,7 @@ class PlotFramework(object):
         '''
         设置右边y轴
         '''
-        callback(self._axes.twinx().get_xaxis())
+        callback(self._axes.twinx().get_yaxis())
 
     def pset_yaxis(self, callback):
         '''
