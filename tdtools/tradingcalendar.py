@@ -285,7 +285,7 @@ class TradingCalendar(object):
         '''
         判断给定的时间是否为交易时间，条件包含两个:
         当天日期是交易日，当前时间在交易时间内
-        
+
         Parameter
         ---------
         t: datetime
