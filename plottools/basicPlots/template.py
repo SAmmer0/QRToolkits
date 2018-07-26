@@ -130,3 +130,33 @@ class DateXAxisPlot(PlotTemplateBase):
         ac = AxisComponent(major_ticks_pos, major_ticks_labels, **self._xaxis_kwargs)
         self.setc_xaxis(ac)
         super().plot(axes, *data)
+
+# --------------------------------------------------------------------------------------------------
+# creator helper
+def object_creator_generator(cls):
+    def creator(*data, **kwargs):
+        obj = cls(*data, **kwargs)
+        return obj
+    return creator
+
+def function_creator_generator(func, ax_parameter):
+    '''
+    用于生成返回函数的creator
+
+    Parameter
+    ---------
+    func: function(*args, **kwargs)
+        核心绘图函数
+    ax_parameter: string
+        绘图轴对应的参数名称
+
+    Return
+    ------
+    creator: function(*data, **kwargs)
+    '''
+    def creator(*data, **kwargs):
+        def plot_func(ax):
+            kwargs[ax_parameter] = ax
+            func(*data, **kwargs)
+        return plot_func
+    return creator
