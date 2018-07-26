@@ -23,7 +23,7 @@ class PlotTemplateBase(object):
     main_plot_creator: function(*data, *kwargs)->func(axes)
         用于创建主绘图功能组件
     main_plot_kwargs: dictionary
-        传入到主绘图组件的除数据外的其他参数
+        传入到creator中的除数据外的其他参数
     '''
     def __init__(self, main_plot_creator, **main_plot_kwargs):
         self._main_plot_creator = main_plot_creator
