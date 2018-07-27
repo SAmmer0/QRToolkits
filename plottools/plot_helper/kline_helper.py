@@ -1,10 +1,14 @@
+#!/usr/bin/env python
+# -*- coding:utf-8
 """
-A collection of functions for analyzing and plotting
-financial data.   User contributions welcome!
-
+Author:  Hao Li
+Email: howardleeh@gmail.com
+Github: https://github.com/SAmmer0
+Created: 2018-07-27 13:38
 """
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
+import pdb
 
 import numpy as np
 from matplotlib import colors as mcolors
@@ -14,7 +18,8 @@ from matplotlib.patches import Rectangle
 from matplotlib.transforms import Affine2D
 
 from six.moves import xrange, zip
-
+from plottools.plot_helper.tick_helper import date_ticker
+from tdtools import get_calendar
 
 def plot_day_summary_oclh(ax, quotes, ticksize=3,
                           colorup='k', colordown='r'):
@@ -883,3 +888,61 @@ def index_bar(ax, vals,
     # add these last
     ax.add_collection(barCollection)
     return barCollection
+
+# --------------------------------------------------------------------------------------------------
+# 主K线绘制函数
+def plot_candle_line(axes, data, columns=None, width=0.8, color_up='red', color_down='green', alpha=1,
+                     majortick_locator=lambda x: get_calendar('stock.sse').is_cycle_target(x, 'MONTHLY', 'LAST'),
+                     majortick_format='{:%Y-%m-%d}', minortick_locator=None, minortick_format=None,
+                     ticklabel_rotation=0):
+    '''
+    用于绘制K线
+
+    Parameter
+    ---------
+    axes: matplotlib.axes.Axes
+        子图
+    data: pandas.DataFrame
+        价格数据，index为时间
+    columns: tuple, default None
+        各个价格对应的数据列名，依次为(open, close, high, low)，默认为('open', 'close', 'high', 'low')
+    width: float, defaut 0.8
+        k线宽度
+    color_up: string, default red
+        上涨K线颜色
+    color_down: string, default green
+        下跌K线颜色
+    alpha: float(0, 1)，default 1
+        k线透明度，0表示透明，1表示不透明
+    majortick_locator: function(date)->boolean
+        主刻度定位函数，默认为每个月最后一个交易日
+    majortick_format: string, default {:%Y-%m-%d}
+        主刻度格式，必须有.format方法
+    mainortick_locator: function(date)->boolean, default None
+        副刻度定位函数，默认没有，即不标识副刻度
+    minortick_format: string, default None
+        副刻度格式，必须有.format方法
+    ticklabel_rotation: float, default 0
+        刻度标签旋转度数
+    '''
+    if columns is None:
+        columns = ('open', 'close', 'high', 'low')
+    dates = data.index
+    data = [data[c] for c in columns]
+    majortick_pos, majortick_labels = date_ticker(dates, majortick_locator, majortick_format)
+    axes.set_xticks(majortick_pos, minor=False)
+    axes.set_xticklabels(majortick_labels, minor=False, rotation=ticklabel_rotation)
+    if minortick_locator is not None:
+        if minortick_format is None:
+            minortick_format = ''
+        minortick_pos, minortick_labels = date_ticker(dates, minortick_locator, minortick_format, add_header=False)
+        # 剔除副刻度中与主刻度重复的项
+        # pdb.set_trace()
+        minortick_pos, minortick_labels = zip(*[(pos, label) for pos, label in zip(minortick_pos, minortick_labels)
+                                              if pos not in majortick_pos])
+        axes.set_xticks(minortick_pos, minor=True)
+        if minortick_format != '':
+            axes.set_xticklabels(minortick_labels, minor=True, rotation=ticklabel_rotation)
+
+    candlestick2_ochl(axes, *data, width=width, colorup=color_up, colordown=color_down,
+                      alpha=alpha)

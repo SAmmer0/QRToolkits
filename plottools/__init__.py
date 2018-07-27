@@ -10,5 +10,5 @@ Created: 2018/7/11
 """
 from plottools.layout import GeneralNLineLayout, GridLayoutBase, NKLayout, NLineLayout
 from plottools.plot_helper.font_helper import chinese_font_context
-from plottools.plot_helper.kline_helper import candlestick2_ohlc
+from plottools.plot_helper.kline_helper import plot_candle_line
 from plottools.plot_helper.tick_helper import date_ticker
