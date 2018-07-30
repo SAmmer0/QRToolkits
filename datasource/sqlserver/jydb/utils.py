@@ -14,10 +14,10 @@ import numpy as np
 from tqdm import tqdm
 from collections import deque
 
-from tdtools import (get_calendar, trans_date, get_last_rpd_date, 
+from tdtools import (get_calendar, trans_date, get_last_rpd_date,
                      generate_rpd_series, is_continue_rpd,
                      generate_rpd_range)
-from datasource.sqlserver.utils import transform_data, expand_data
+from datasource.sqlserver.utils import transform_data, expand_data, fetch_db_data
 from datasource.sqlserver.jydb.dbengine import jydb
 from datasource.const import MAIN_LOGGER_NAME
 
@@ -49,7 +49,7 @@ def map2td(data, days, timecol=None, from_now_on=True, fillna=None, limit=120):
     limit: int, default 120
         数据映射过程中，往后最大填充数量；即如果当前时间与数据更改时间的间隔(以days的
         索引数为准)超过该参数，往后不继续填充，保持数据为NA值
- 
+
     Return
     ------
     out: pandas.DataFrame
@@ -185,7 +185,7 @@ def calc_seasonly_data(data, cols):
             logger.warning("[Operation=calc_seasonly_data, Info=\"Discontinuous report date in {}!\"]".format(df[symbol_col].iloc[0]))
             new_rpds = generate_rpd_range(rpds[0], rpds[-1])
             diff = set(new_rpds).difference(rpds)
-            if len(diff) > df.shape[0]: 
+            if len(diff) > df.shape[0]:
                 # 存在一些潜在的问题，例如当前股票中途有一段时间没有发布季报，
                 # 并且缺失的季度数比较多，后面又继续发了，仍然会导致整体计算和分开计算的不一致
                 return pd.DataFrame(columns=[data_col, '__RPT_TAG__', '__UT_TAG__']).set_index(['__RPT_TAG__', '__UT_TAG__'])
@@ -326,3 +326,28 @@ def calc_offsetdata(df, data_col, period_flag_col, offset, multiple):
     except KeyError:
         result = np.nan
     return result
+
+def get_db_update_time():
+    '''
+    以指数行情作为标志获取聚源数据库中最新数据的日期
+
+    Return
+    ------
+    date: datetime like
+        更新时间，如果数据库没有数据，返回时间为1900-01-01
+    '''
+    sql ='''
+    SELECT S.XGRQ
+    FROM QT_IndexQuote S, SecuMain M
+    WHERE
+        S.InnerCode = M.InnerCode AND
+        M.SecuCode = '000001' AND
+        M.SecuCategory = 4 AND
+        S.TradingDay >= '2007-01-01'
+        ORDER BY S.XGRQ ASC
+    '''
+    data = fetch_db_data(jydb, sql, ['date'])
+    if len(data) <= 0:
+        return trans_date('1900-01-01')
+    else:
+        return data.date.iloc[-1]
