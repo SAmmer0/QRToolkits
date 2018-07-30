@@ -27,8 +27,10 @@ class DataDescription(object):
         若类型为TS开头，则calc_method返回pandas.Series，反之则返回pandas.DataFrame
     desc: string, default ''
         数据相关描述
+    in_test: boolean, False
+        当前数据是否处于测试状态，默认表示未处于该状态
     '''
-    def __init__(self, calc_method, update_time, datatype, dep=None, desc=''):
+    def __init__(self, calc_method, update_time, datatype, dep=None, desc='', in_test=False):
         self.name = ''
         self.calc_method = calc_method
         self.update_time = update_time
@@ -40,6 +42,7 @@ class DataDescription(object):
             datatype = DataType[datatype]
         self.datatype = datatype
         self.description = desc
+        self.in_test = in_test
 
     def set_name(self, name):
         '''

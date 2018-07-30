@@ -130,6 +130,22 @@ def is_dependency_updated(data_msg, ut_meta, end_time):
             return False
     return True
 
+def is_test_data(dmsg):
+    '''
+    判断当前数据是否为处于测试中的数据
+
+    Parameter
+    ---------
+    dmsg: dictionary
+        格式为{'data_description': dd, 'rel_path': rel_path}
+
+    Return
+    ------
+    result: boolean
+        True表示处于测试中
+    '''
+    return dmsg['data_description'].in_test
+
 def get_endtime():
     '''
     计算当前时间对应的数据结束时间
@@ -173,6 +189,10 @@ def update_all(show_progress=True):
 
         for data_name in update_order:
             d_msg = data_dict[data_name]
+            if is_test_data(d_msg):  # 不更新处于测试中的数据
+                updating_logger.info('[data_name={dn}, description=\"Testing data will not be updated, ignored\"'.
+                                     format(dn=data_name))
+                continue
             if not is_dependency_updated(d_msg, ut_meta, end_time):    # 依赖项还未更新，则直接忽视(本次不进行更新)
                 updating_logger.info('[data_name={dn}, description=\"Dependency has not been updated, ignored\"]'.
                                      format(dn=data_name))
