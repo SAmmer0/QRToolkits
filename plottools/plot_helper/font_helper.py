@@ -17,4 +17,4 @@ def chinese_font_context():
     ------
     context_manager
     '''
-    return rc_context(rc={'font.sans-serif': ['Microsoft YaHei']})
+    return rc_context(rc={'font.sans-serif': ['SimHei']})
