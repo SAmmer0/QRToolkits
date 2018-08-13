@@ -41,7 +41,8 @@ class PITDataCache(object):
     >>> beta_cache = pitcache_getter('BETA', 100)    # pitcache_getter(data_name, preload_num)
     >>> data = beta_cache.get_csdata('2018-04-19')
     '''
-    __cache = {}
+    def __init__(self):
+        self.__cache = {} # 修改为类变量，避免多个不同的实例共享__cache数据
     def __call__(self, name, preload_num):
         '''
         加载给定名称和预加载数量的数据
