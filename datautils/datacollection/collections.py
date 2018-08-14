@@ -69,20 +69,13 @@ class DataGetterCollection(object):
             数据名称
         dv: DataView or the like
             DataView对象或者其他具有get_csdata以及get_tsdata两个接口的对象
-
-        Return
-        ------
-        result: bool
-            True表示成功
         '''
         try:
             if name in self._data:
                 logger.info('[Operation=DataGetterCollection.__setitem__, Info=\'Modify existing data getter(name={}).\''.format(name))
             self._data[name] = dv
-            return True
         except Exception as e:
             logger.exception(e)
-            return False
 
     def __iter__(self):
         '''
