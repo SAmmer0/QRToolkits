@@ -42,3 +42,48 @@ sseme_scheduler = RSchedule(lambda t: get_calendar('stock.sse').is_cycle_target(
 
 # --------------------------------------------------------------------------------------------------
 # Rule
+class Rule(object):
+    '''
+    标的筛选规则类
+    提供以下功能：
+    on_time: 在给定的时间，对给定的标的池进行筛选，然后返回筛选结果和筛选状态(用于表明当前筛选是否启用)
+
+    Parameter
+    ---------
+    datasources: pitdata.DataGetterCollection
+        用于计算的相关数据源
+    filter_func: function
+        筛选标的用的函数，格式为function(time: datetime, datasources: pitdata.DataGetterCollection, secu_pool: iterable)->list of symbol
+    scheduler: RSchedule
+        用于设置规则类的启用时间
+    '''
+    def __init__(self, datasources, filter_func, scheduler):
+        self._scheduler = scheduler
+        self._filter = filter_func
+        self._datasources = datasources
+
+    def on_time(self, time, secu_pool):
+        '''
+        在每个运行的时间点调用，如果当前时间点符合scheduler设定的时间，则开始依照规则进行计算
+
+        Parameter
+        ---------
+        time: datetime like
+            当前运行的时间
+        secu_pool: iterable
+            筛选的标的池
+
+        Return
+        ------
+        enabled: boolean
+            用于标记当前规则是否被启用，True表示被启用，False反之
+        result: list
+            筛选结果，如果该规则未被启用，则直接返回传入的secu_pool
+        '''
+        if self._scheduler.is_time(time):
+            result = self._filter(time, self._datasources, secu_pool)
+            enabled = True
+        else:
+            result = list(secu_pool)
+            enabled = False
+        return enabled, result
