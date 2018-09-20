@@ -64,7 +64,7 @@ class GridLayoutBase(object):
                                                               self._total_col_num, 'horizontal')
         axes = self._figure.add_subplot(self._gs[self._current_row: row_end, self._current_col: col_end])
         self._axes.append(axes)
-        self._gs.tight_layout(self._figure)
+        # self._gs.tight_layout(self._figure)
         return axes
 
     def get_next_col(self, col_gap):
@@ -89,7 +89,7 @@ class GridLayoutBase(object):
         row_end = self._get_next_row_id()
         axes = self._figure.add_subplot(self._gs[self._current_row: row_end, self._current_col: col_end])
         self._axes.append(axes)
-        self._gs.tight_layout(self._figure)
+        # self._gs.tight_layout(self._figure)
         return axes
 
     def get_next_axes(self, row_gap, col_gap):
@@ -192,6 +192,17 @@ class GridLayoutBase(object):
         if self._current_col is not None:
             result = self._current_col + self._current_col_gap
         return result
+    
+    def tight_layout(self, **kwargs):
+        '''
+        用于避免各个子图之间出现重叠的问题，一般在所有子图绘图完成后调用
+
+        Parameter
+        ---------
+        kwargs: dictionary
+            用于传入到GridSpec.tight_layout(fig)中的其他参数
+        '''
+        self._gs.tight_layout(self._figure, **kwargs)
 
     @property
     def figure(self):

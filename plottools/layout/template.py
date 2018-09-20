@@ -51,6 +51,17 @@ class LayoutTemplateBase(object, metaclass=ABCMeta):
         '''
         return None
     
+    def tight_layout(self, **kwargs):
+        '''
+        使子图布局更为合理，避免子图之间出现重叠，一般在所有子图绘制完成后调用
+
+        Parameter
+        ---------
+        kwargs: dictionary
+            传入到GridSpec.tight_layout(fig)中的其他参数
+        '''
+        self._glb.tight_layout(**kwargs)
+
     @property
     def figure(self):
         return self._glb.figure
