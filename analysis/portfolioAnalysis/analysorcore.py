@@ -6,6 +6,8 @@ Email: howardleeh@gmail.com
 Github: https://github.com/SAmmer0
 Created: 2018/3/29
 """
+import pdb
+
 import pandas as pd
 import numpy as np
 
@@ -44,7 +46,8 @@ class ExposureAnalysor(object):
         if factor_name in self._factor_data:
             raise ValueError('Duplicate factor name! {} is already contained!'.format(factor_name))
         if is_industry and self._industry_fn is not None:
-            raise ValueError('Industry data already exist! Please delete old data before adding a new one.')
+            raise ValueError(
+                'Industry data already exist! Please delete old data before adding a new one.')
         if is_industry:
             self._industry_fn = factor_name
         self._factor_data[factor_data] = factor_data
@@ -124,7 +127,7 @@ class ExposureAnalysor(object):
         raw_data = self._handle_cash(raw_data)
         return raw_data
 
-    def calculate_exposure(self, date, portfolio, benchmark=None):
+    def calculate_exposure(self, date, portfolio, benchmark=None, adjust_benchmark_cashratio=False):
         '''
         计算给定组合在特定日期的因子暴露
         Parameter
@@ -137,26 +140,43 @@ class ExposureAnalysor(object):
         benchmark: dict, default None
             基准组合，格式与portfolio相同，若基准中没有现金，会做同样的处理。若该参数为None，则默认基准为
             100%的现金
+        adjust_benchmark_cashratio: boolean, default False
+            是否将基准中的现金比例调整至与组合一致，该调整仅当benchmark不为None，且成分中没有CASH是才可能进行
 
         Return
         ------
         exposure: pandas.Series
             index为因子名称，值为相关暴露
+
+        Notes
+        -----
+        2018-09-26: 添加adjust_benchmark_cashratio是因为正常持仓都包含现金，如果以指数为基准，会在计算行业
+            暴露时，导致行业总暴露加总小于0，为了剔除现金对整体暴露的影响，进行相应调整
         '''
-        def add_cash(port):
-            if CASH not in port:
-                cash_weight = 1 - sum(port.values())
-                if cash_weight < 0 and not np.isclose(cash_weight, 0):
-                    print(cash_weight)
-                    raise ValueError('The sum of portfolio weights exceeds 1!')
-                port[CASH] = cash_weight
-            return pd.Series(port)
+        def add_cash(port, target_cashratio=None):
+            port = pd.Series(port)
+            if CASH not in port.index:
+                if target_cashratio is None:
+                    cash_weight = 1 - port.sum()
+                    if cash_weight < 0 and not np.isclose(cash_weight, 0):
+                        raise ValueError('The sum of portfolio weights exceeds 1!')
+                    port[CASH] = cash_weight
+                else:
+                    if not np.isclose(port.sum(), 1):
+                        ValueError('The sum of portfolio weights is not close to 1!')
+                    port = port * (1 - target_cashratio)
+                    port[CASH] = target_cashratio
+            return port
 
         portfolio = add_cash(portfolio)
         if benchmark is None:
             benchmark = pd.Series({sn: 0 if sn != CASH else 1 for sn in portfolio.index})
         else:
-            benchmark = add_cash(benchmark)
+            if adjust_benchmark_cashratio:
+                target_cashratio = portfolio['CASH']
+            else:
+                target_cashratio = None
+            benchmark = add_cash(benchmark, target_cashratio)
         idx = portfolio.index.union(benchmark.index)
         factor_data = self._combine_datas(date).reindex(idx)
         if np.any(np.any(pd.isnull(factor_data), axis=1)):    # 存在NA数据
@@ -164,4 +184,5 @@ class ExposureAnalysor(object):
             pass
         exceeded_port = portfolio.reindex(idx).fillna(0) - benchmark.reindex(idx).fillna(0)
         exposure = exceeded_port.dot(factor_data)
+        # pdb.set_trace()
         return exposure
