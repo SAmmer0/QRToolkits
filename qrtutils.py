@@ -145,5 +145,25 @@ def set_logger(log_config, module_path, logger_name):
     return logger.name
 
 
+def validation_checker(field):
+    '''
+    母函数，用于生成检查参数在定义域中的函数
+
+    Parameter
+    ---------
+    field: iterable
+        有效域
+
+    Return
+    ------
+    func: function(param)
+        如果参数不在有效域中，产生ValueError
+    '''
+    def inner(param):
+        if param not in field:
+            raise ValueError('Invalid parameter, only {} are supported.'.format(field))
+    return inner
+
+
 if __name__ == '__main__':
     config = parse_config(r'E:\QRToolkits\database\config.json')
