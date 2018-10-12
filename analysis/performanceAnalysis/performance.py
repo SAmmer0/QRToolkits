@@ -5,6 +5,7 @@
 # @Link    : https://github.com/SAmmer0
 # @Version : $Id$
 from math import sqrt
+import pdb
 
 import pandas as pd
 import numpy as np
@@ -204,6 +205,52 @@ def nav2ret(nav, method='log'):
         return np.log(nav).diff().fillna(0)
     else:
         return nav.pct_change().fillna(0)
+
+
+def ret2nav(ret, method='log'):
+    '''
+    将收益率转换为净值
+
+    Parameter
+    ---------
+    ret: pandas.Series
+        收益率数据
+    method: string, default 'plain'
+        转换方式，可选的有[plain, log]
+
+    Return
+    ------
+    nav: pandas.Series
+    '''
+    validation_checker(['log', 'plain'])(method)
+    if method == 'log':
+        return np.exp(ret.cumsum())
+    else:
+        return ret.add(1).cumprod()
+
+
+def transform_return_frequency(raw_ret, freq, method='plain'):
+    '''
+    转换收益的频率
+
+    Parameter
+    ---------
+    raw_ret: float
+        原始收益
+    freq: float
+        目标收益相对于源收益数据的倍数，例如源数据为月度收益，要转换为年度收益，则freq为12
+    method: string, default 'plain'
+        收益计算方式，可选为[plain, log]
+
+    Return
+    ------
+    transed_ret: float
+    '''
+    validation_checker(['log', 'plain'])(method)
+    if method == 'plain':
+        return (1 + raw_ret)**freq - 1
+    else:
+        return raw_ret * freq
 # --------------------------------------------------------------------------------------------------
 # 指标计算模板
 # 最终收益
@@ -261,9 +308,9 @@ def comparable_return(nav, bnav, freq=250, method='plain'):
     tret = total_return(nav, bnav, method)[0]
     period_len = len(nav) - 1
     if method == 'log':
-        return (tret * freq / period_len, )
+        return (transform_return_frequency(tret, freq / period_len, method), )
     else:
-        return ((1 + tret)**(freq / period_len) - 1, )
+        return (transform_return_frequency(tret, freq / period_len, method), )
 
 
 def comparable_vol(nav, bnav, freq=250, method='plain'):
@@ -464,7 +511,7 @@ def raw_alpha(nav, bnav, rf_rate=0., freq=250, method='plain'):
         无风险利率，其时间跨度应当与alpha的时间跨度匹配，例如如果是要计算年化的alpha，则rf_rate应该为年化的
         无风险收益率
     freq: int, default 250
-        数据的频率
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
     method: string, default 'plain'
         收益的计算方式，可选为[plain, log]
 
@@ -482,6 +529,68 @@ def raw_alpha(nav, bnav, rf_rate=0., freq=250, method='plain'):
     return (comparable_ret - rf_rate - rawbeta * (comparable_ret_benchmark - rf_rate), )
 
 
+def info_ratio(nav, bnav, freq=250, method='plain'):
+    '''
+    信息比率计算
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    freq: int, default 250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+    method: string, default 'plain'
+        收益计算方法， 可选为[plain, log]
+
+    Return
+    ------
+    infor: (infor, )
+
+    Notes
+    -----
+    infor = comparable_ret(excess_ret) / comparable_vol(excess_ret)
+    '''
+    ret = nav2ret(nav, method)
+    ret_benchmark = nav2ret(bnav, method)
+    excess_ret = ret - ret_benchmark
+    comparable_excess_ret = comparable_return(ret2nav(excess_ret, method), None)[0]
+    comparable_excess_vol = comparable_vol(ret2nav(excess_ret, method), None, freq, method)[0]
+    return (comparable_excess_ret / comparable_excess_vol, )
+
+
+def sharp_ratio(nav, bnav=None, freq=250, method='plain', *, rf_rate=0.):
+    '''
+    计算夏普比率
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series, default None
+        基准净值，此处没有作用，仅为占位符
+    freq: int, default 250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+    method: string, default 'plain'
+        收益计算方法，可选的包含[plain, log]
+    rf_rate: float, default 0.
+        无风险利率，仅能使用键值方式设置
+
+    Return
+    ------
+    sr: (sr, )
+
+    Notes
+    -----
+    sr = compararable_ret(ret - rf_rate) / comparable_vol(ret)
+    '''
+    bnav = ret2nav(pd.Series(transform_return_frequency(rf_rate, 1 / freq, method) * np.ones_like(nav),
+                             index=nav.index))
+    # pdb.set_trace()
+    return info_ratio(nav, bnav, freq, method)
+
+
 # --------------------------------------------------------------------------------------------------
 # 默认指标计算配置
 DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
@@ -493,5 +602,7 @@ DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'rolling_annualized_return': Indicator(rolling_comparable_return),
                       'win_rate': Indicator(win_rate),
                       'alpha': Indicator(raw_alpha),
-                      'beta': Indicator(raw_beta)}
+                      'beta': Indicator(raw_beta),
+                      'info_ratio': Indicator(info_ratio),
+                      'sharp_ratio': Indicator(sharp_ratio)}
 general_iae_factory = IAEFactory(DEFAULT_IAE_CONFIG)
