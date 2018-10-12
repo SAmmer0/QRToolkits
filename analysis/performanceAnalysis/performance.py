@@ -259,10 +259,11 @@ def comparable_return(nav, bnav, freq=250, method='plain'):
     log模式下年化收益的计算方式为 ret = log_total_ret * freq / len
     '''
     tret = total_return(nav, bnav, method)[0]
+    period_len = len(nav) - 1
     if method == 'log':
-        return (tret * freq / len(nav), )
+        return (tret * freq / period_len, )
     else:
-        return ((1 + tret)**(freq / len(nav)) - 1, )
+        return ((1 + tret)**(freq / period_len) - 1, )
 
 
 def comparable_vol(nav, bnav, freq=250, method='plain'):
@@ -276,7 +277,7 @@ def comparable_vol(nav, bnav, freq=250, method='plain'):
     bnav: pandas.Series
         基准净值
     freq: int, default 250
-        策略精致的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
     method: string, default 'log'
         收益计算方式，提供[plain, log]两种
 
@@ -295,9 +296,118 @@ def comparable_vol(nav, bnav, freq=250, method='plain'):
     return (sqrt((init_vol**2 + (1 + init_ret)**2)**freq - (1 + init_ret)**(2 * freq)), )
 
 
+def max_drawndown(nav, bnav):
+    '''
+    最大回撤函数
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+
+    Return
+    ------
+    result: tuple(mdd, mdd_start_time, mdd_end_time)
+    '''
+    cum_max = nav.cummax()
+    dd = 1 - nav / cum_max
+    mdd = dd.max()
+    mdd_end = dd.idxmax()
+    mdd_start = nav[nav == cum_max[mdd_end]].index[0]
+    return mdd, mdd_start, mdd_end
+
+
+def max_drawndown_duration(nav, bnav):
+    '''
+    最大回撤期
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+
+    Return
+    ------
+    result: tuple(mddd, mddd_start_time, mddd_end_time)
+    '''
+    cum_max = nav.cummax()
+    max_duration_nav = cum_max.value_counts().argmax()
+    max_duration_period = cum_max.loc[np.isclose(cum_max, max_duration_nav)]
+    duration_length = len(max_duration_period)
+    duration_start = min(max_duration_period.index)
+    duration_end = max(max_duration_period.index)
+    return (duration_length, duration_start, duration_end)
+
+
+def rolling_drawndown(nav, bnav, window=250):
+    '''
+    滚动回撤
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    window: int, default 250
+        滚动窗口的长度
+
+    Return
+    ------
+    out: (pandas.Series, )
+    '''
+    rolling_max = nav.rolling(window, min_periods=1).max()
+    out = 1 - nav / rolling_max
+    return out
+
+
+def rolling_comparable_return(nav, bnav, freq=250, method='plain', cut_tail=30):
+    '''
+    滚动起始时间的可比收益，即以每一个交易日作为起始日期计算最终的可比收益
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    method: string, default 'plain'
+        收益计算方式，可选为[plain, log]
+    freq: int, default 250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+    cut_tail: int, default 10
+        尾部数据因为时间间隔比较短，容易受极端值的影响，因此需要扣除。该参数表示扣除的尾部的长度
+
+    Return
+    ------
+    out: (pands.Series, )
+    '''
+    validation_checker(['plain', 'log'])(method)
+    if freq <= 0 or not isinstance(freq, int):
+        raise ValueError('freq parameter must be positive integer!')
+    if cut_tail <= 0 or not isinstance(freq, int):
+        raise ValueError('cut_tail parameter must be positive integer!')
+    valid_nav = nav.iloc[:-cut_tail]
+    period_time = freq / (len(nav) - np.arange(1, len(valid_nav) + 1))
+    if method == 'plain':
+        ret = (nav.iloc[-1] / valid_nav)**period_time - 1
+    else:
+        ret = (np.log(nav.iloc[-1]) - np.log(valid_nav)) * period_time
+    return (ret, )
+
+
+
 # --------------------------------------------------------------------------------------------------
 # 默认指标计算配置
 DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'annualized_return': Indicator(comparable_return),
-                      'annualized_vol': Indicator(comparable_vol)}
+                      'annualized_vol': Indicator(comparable_vol),
+                      'max_drawndown': Indicator(max_drawndown),
+                      'max_drawndown_duration': Indicator(max_drawndown_duration),
+                      'rolling_drawndown': Indicator(rolling_drawndown),
+                      'rolling_annualized_return': Indicator(rolling_comparable_return)}
 general_iae_factory = IAEFactory(DEFAULT_IAE_CONFIG)
