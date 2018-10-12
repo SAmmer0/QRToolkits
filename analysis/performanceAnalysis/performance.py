@@ -400,6 +400,87 @@ def rolling_comparable_return(nav, bnav, freq=250, method='plain', cut_tail=30):
     return (ret, )
 
 
+def win_rate(nav, bnav, threshold=0., method='plain'):
+    '''
+    胜率计算函数
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    threshold: float, default 0
+        识别合意收益的阈值，默认为0，大于等于该阈值的数据将被认为是合意收益
+    method: string, default 'plain'
+        收益计算方式，可选为[plain, log]
+
+    Return
+    ------
+    wr: (win_rate, )
+    '''
+    ret = nav2ret(nav, method)
+    win_count = (ret >= threshold).sum()
+    return (win_count / len(ret))
+
+
+def raw_beta(nav, bnav, method='plain'):
+    '''
+    粗略的计算beta
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    method: string, default 'plain'
+        收益的计算方式，可选为[plain, log]
+
+    Return
+    ------
+    beta: (beta, )
+
+    Notes
+    -----
+    beta = cov(ret, ret_benchmark) / var(ret_benchmark)
+    '''
+    ret = nav2ret(nav, method)
+    ret_benchmark = nav2ret(bnav, method)
+    return (np.cov(ret, ret_benchmark)[0][1] / np.var(ret_benchmark), )
+
+
+def raw_alpha(nav, bnav, rf_rate=0., freq=250, method='plain'):
+    '''
+    粗略的计算alpha
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准的净值
+    rf_rate: flaot, default 0.
+        无风险利率，其时间跨度应当与alpha的时间跨度匹配，例如如果是要计算年化的alpha，则rf_rate应该为年化的
+        无风险收益率
+    freq: int, default 250
+        数据的频率
+    method: string, default 'plain'
+        收益的计算方式，可选为[plain, log]
+
+    Return
+    ------
+    alpha: (alpha, )
+
+    Notes
+    -----
+    alpha = comparable_ret - rf_rate - raw_beta*(comparable_ret_benchmark - rf_rate)
+    '''
+    comparable_ret = comparable_return(nav, bnav, freq, method)[0]
+    comparable_ret_benchmark = comparable_return(bnav, bnav, freq, method)[0]
+    rawbeta = raw_beta(nav, bnav, method)[0]
+    return (comparable_ret - rf_rate - rawbeta * (comparable_ret_benchmark - rf_rate), )
+
 
 # --------------------------------------------------------------------------------------------------
 # 默认指标计算配置
@@ -409,5 +490,8 @@ DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'max_drawndown': Indicator(max_drawndown),
                       'max_drawndown_duration': Indicator(max_drawndown_duration),
                       'rolling_drawndown': Indicator(rolling_drawndown),
-                      'rolling_annualized_return': Indicator(rolling_comparable_return)}
+                      'rolling_annualized_return': Indicator(rolling_comparable_return),
+                      'win_rate': Indicator(win_rate),
+                      'alpha': Indicator(raw_alpha),
+                      'beta': Indicator(raw_beta)}
 general_iae_factory = IAEFactory(DEFAULT_IAE_CONFIG)
