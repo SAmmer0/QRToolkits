@@ -6,6 +6,7 @@
 # @Version : $Id$
 from math import sqrt
 import pdb
+from copy import deepcopy
 
 import pandas as pd
 import numpy as np
@@ -132,11 +133,12 @@ class IAEFactory(object):
     Parameter
     ---------
     iae_config: dictionary
-        格式为{}
+        格式为{indicator_name: Indicator}
     '''
 
     def __init__(self, default_iae_config):
         self._iae_config = default_iae_config
+        self._default_iae = None
 
     def make_iae(self, config):
         '''
@@ -152,9 +154,10 @@ class IAEFactory(object):
         iae: IndicatorAnalysorEngine
             对部分指标计算器的参数修改后的指标分析引擎
         '''
-        default_iae = self.get_default_iae()
+        iea = deepcopy(self.get_default_iae())
         for cfg_name, cfg in config.items():
-            getattr(default_iae, cfg_name)._mod_params(*cfg[0], **cfg[1])
+            getattr(iea, cfg_name)._mod_params(*cfg[0], **cfg[1])
+        return iea
 
     def get_default_iae(self):
         '''
@@ -165,7 +168,9 @@ class IAEFactory(object):
         iae: IndicatorAnalysorEngine
             返回默认的分析引擎
         '''
-        return IndicatorAnalysorEngine(self._iae_config)
+        if self._default_iae is None:
+            self._default_iae = IndicatorAnalysorEngine(self._iae_config)
+        return self._default_iae
 
     def list_indicator(self):
         '''
