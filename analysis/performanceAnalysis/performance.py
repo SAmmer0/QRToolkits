@@ -7,9 +7,11 @@
 from math import sqrt
 import pdb
 from copy import deepcopy
+from functools import partial
 
 import pandas as pd
 import numpy as np
+import scipy.stats as sp_stats
 
 from qrtutils import validation_checker
 # --------------------------------------------------------------------------------------------------
@@ -187,7 +189,7 @@ class IAEFactory(object):
 # 辅助工具
 
 
-def nav2ret(nav, method='log'):
+def nav2ret(nav, method='log', window=1):
     '''
     将净值转换为收益率
 
@@ -197,6 +199,9 @@ def nav2ret(nav, method='log'):
         原始净值数据
     method: string, default 'log'
         计算收益率的方法，提供[plain, log]两种，分别表示单利和连续复利
+    window: int, default 1
+        计算收益的时间窗口长度
+
     Return
     ------
     ret: pandas.Series
@@ -207,9 +212,9 @@ def nav2ret(nav, method='log'):
     '''
     validation_checker(['log', 'plain'])(method)
     if method == 'log':
-        return np.log(nav).diff().fillna(0)
+        return np.log(nav).diff(window).fillna(0)
     else:
-        return nav.pct_change().fillna(0)
+        return nav.pct_change(window).fillna(0)
 
 
 def ret2nav(ret, method='log'):
@@ -256,6 +261,22 @@ def transform_return_frequency(raw_ret, freq, method='plain'):
         return (1 + raw_ret)**freq - 1
     else:
         return raw_ret * freq
+
+
+def normalize_nav(nav):
+    '''
+    将净值正则化，即转化为以1为初始值的净值序列
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        原净值序列
+
+    Return
+    ------
+    transed_nav: pandas.Series
+    '''
+    return nav / nav.iloc[0]
 # --------------------------------------------------------------------------------------------------
 # 指标计算模板
 # 最终收益
@@ -513,8 +534,7 @@ def raw_alpha(nav, bnav, rf_rate=0., freq=250, method='plain'):
     bnav: pandas.Series
         基准的净值
     rf_rate: flaot, default 0.
-        无风险利率，其时间跨度应当与alpha的时间跨度匹配，例如如果是要计算年化的alpha，则rf_rate应该为年化的
-        无风险收益率
+        无风险利率，频率与净值频率相同
     freq: int, default 250
         策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
     method: string, default 'plain'
@@ -526,12 +546,13 @@ def raw_alpha(nav, bnav, rf_rate=0., freq=250, method='plain'):
 
     Notes
     -----
-    alpha = comparable_ret - rf_rate - raw_beta*(comparable_ret_benchmark - rf_rate)
+    alpha = comparable_ret - transed_rf_rate - raw_beta*(comparable_ret_benchmark - rf_rate)
     '''
     comparable_ret = comparable_return(nav, bnav, freq, method)[0]
     comparable_ret_benchmark = comparable_return(bnav, bnav, freq, method)[0]
     rawbeta = raw_beta(nav, bnav, method)[0]
-    return (comparable_ret - rf_rate - rawbeta * (comparable_ret_benchmark - rf_rate), )
+    transed_rf_rate = transform_return_frequency(rf_rate, freq, method)
+    return (comparable_ret - transed_rf_rate - rawbeta * (comparable_ret_benchmark - transed_rf_rate), )
 
 
 def info_ratio(nav, bnav, freq=250, method='plain'):
@@ -580,7 +601,7 @@ def sharp_ratio(nav, bnav=None, freq=250, method='plain', *, rf_rate=0.):
     method: string, default 'plain'
         收益计算方法，可选的包含[plain, log]
     rf_rate: float, default 0.
-        无风险利率，仅能使用键值方式设置
+        无风险利率，仅能使用键值方式设置，频率与净值数据相同
 
     Return
     ------
@@ -590,10 +611,171 @@ def sharp_ratio(nav, bnav=None, freq=250, method='plain', *, rf_rate=0.):
     -----
     sr = compararable_ret(ret - rf_rate) / comparable_vol(ret)
     '''
-    bnav = ret2nav(pd.Series(transform_return_frequency(rf_rate, 1 / freq, method) * np.ones_like(nav),
-                             index=nav.index))
-    # pdb.set_trace()
+    bnav = ret2nav(pd.Series(rf_rate * np.ones_like(nav), index=nav.index))
     return info_ratio(nav, bnav, freq, method)
+
+
+def oneside_vol(nav, bnav, freq=250, method='plain', threshold=0., direction=-1):
+    '''
+    单向波动率，即上行波动率或者下行波动率
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    freq: int, default 250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+    method: string, default 'plain'
+        计算收益率的方法，可选有[log, plain]
+    threshold: double, default 0.
+        识别上行或者下行收益的阈值，收益的频率与freq要匹配
+    direction: int, default -1
+        波动率方向，可选为[-1, 1]，其中-1表示下行，1表示上行
+
+    Return
+    ------
+    dv: (dv, )
+
+    Notes
+    -----
+    dv = sqrt(freq / len(ret) * sum(min(ret - threshold, 0)**2))
+    '''
+    validation_checker([-1, 1])(direction)
+    ret = nav2ret(nav, method)
+    valid_ret = ret - threshold
+    valid_ret.loc[direction * valid_ret <= 0] = 0
+    return (np.sqrt(valid_ret.dot(valid_ret) * freq / len(nav)), )
+
+
+def sortino_ratio(nav, bnav, freq=250, method='plain', rf_rate=0., threshold=None):
+    '''
+    索提诺比率
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    freq: int, default 250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+    method: string, default 'plain'
+        计算收益率的方法，可选有[log, plain]
+    rf_rate: float, default 0.
+        无风险利率，频率与净值数据相同
+    threshold: float, default None
+        下行波动率的识别阈值，默认为None，表示该阈值等于无风险利率
+
+    Return
+    ------
+    sr: (sr, )
+
+    Notes
+    -----
+    sr = comparable_ret(excess_ret) / downside_vol
+    '''
+    ret = nav2ret(nav, method)
+    excess_ret = ret - rf_rate
+    cpr_ret = comparable_return(ret2nav(excess_ret, method), bnav, freq, method)[0]
+    if threshold is None:
+        threshold = rf_rate
+    ds_vol = oneside_vol(nav, bnav, freq, method, threshold, -1)[0]
+    return (cpr_ret / ds_vol, )
+
+
+def max_gl(nav, bnav, method='plain', window=20, gl_flag=1, excess_ret_flag=False):
+    '''
+    滚动窗口的最大收益或损失
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    method: string, default 'plain'
+        收益计算方式，可选有[log, plain]
+    window: pandas.Series
+        收益或损失的计算窗口长度
+    gl_flag: int, default 1
+        标记计算收益还是损失，1表示收益，-1表示损失
+    er_flag: boolean, default False
+        是否以超额数据为基础计算
+
+    Return
+    ------
+    gl: (gl, gl_start, gl_end)
+    '''
+    validation_checker([1, -1])(gl_flag)
+    ret = nav2ret(nav, method, window)
+    if excess_ret_flag:
+        ret = ret - nav2ret(bnav, method, window)
+    mgl = gl_flag * np.max(ret * gl_flag)
+    mgl_end = (ret * gl_flag).argmax()
+    mgl_start = ret.index[ret.index.get_loc(mgl_end) - window]
+    return (mgl, mgl_start, mgl_end)
+
+
+def ret_statistics(nav, bnav, func, method='plain'):
+    '''
+    单位时间收益的统计量
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准收益
+    func: function(pandas.Series)->tuple
+        计算统计量的函数
+    method: string, default 'plain'
+        计算收益的方式，可选为[plain, log]
+
+    Return
+    ------
+    stats: tuple
+    '''
+    ret = nav2ret(nav, method)
+    return func(ret)
+
+
+def period_ret(nav, bnav, period_identifier, method='plain', excess_ret_flag=False):
+    '''
+    分期间收益计算函数
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    period_identifier: string
+        对时间区间进行识别的字符串，例如'%Y'表示以年为单位，'%Y-%m'表示以月为单位
+    method: string, default 'plain'
+        收益计算方法，可选为[log, plain]，如果选择log，不推荐将excess_ret_flag设为True
+    excess_ret_flag: boolean, default False
+        是否计算超额收益
+
+    Return
+    ------
+    rets: (pandas.Series, )
+    '''
+    def cal_ret(v):
+        v = normalize_nav(v)
+        period_end_v = v.groupby(lambda x: x.strftime(period_identifier)).tail(1)
+        period_end_r = nav2ret(period_end_v, method)
+        if method == 'plain':
+            period_end_r.iloc[0] = period_end_v.iloc[0] - 1
+        else:
+            period_end_r.iloc[0] = np.log(period_end_v.iloc[0])
+        return period_end_r
+    period_end_ret = cal_ret(nav)
+    if excess_ret_flag:
+        period_end_bret = cal_ret(bnav)
+        period_end_ret = period_end_ret - period_end_bret
+    return (period_end_ret, )
 
 
 # --------------------------------------------------------------------------------------------------
@@ -609,5 +791,14 @@ DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'alpha': Indicator(raw_alpha),
                       'beta': Indicator(raw_beta),
                       'info_ratio': Indicator(info_ratio),
-                      'sharp_ratio': Indicator(sharp_ratio)}
+                      'sharp_ratio': Indicator(sharp_ratio),
+                      'downside_vol': Indicator(partial(oneside_vol, direction=-1)),
+                      'upside_vol': Indicator(partial(oneside_vol, direction=1)),
+                      'sortino_ratio': Indicator(sortino_ratio),
+                      'max_rolling_gain': Indicator(partial(max_gl, gl_flag=1)),
+                      'max_rolling_loss': Indicator(partial(max_gl, gl_flag=-1)),
+                      'return_skew': Indicator(partial(ret_statistics, func=lambda x: (sp_stats.skew(x), ))),
+                      'return_kurtosis': Indicator(partial(ret_statistics, func=lambda x: (sp_stats.kurtosis(x), ))),
+                      'yearly_return': Indicator(partial(period_ret, period_identifier='%Y')),
+                      'monthly_return': Indicator(partial(period_ret, period_identifier='%Y-%m'))}
 general_iae_factory = IAEFactory(DEFAULT_IAE_CONFIG)
