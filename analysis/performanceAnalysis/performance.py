@@ -239,6 +239,30 @@ def ret2nav(ret, method='log'):
         return ret.add(1).cumprod()
 
 
+def cal_return(r0, r1, method):
+    '''
+    计算从r0到r1的收益
+
+    Parameter
+    ---------
+    r0: float or np.array like
+        前期净值数据
+    r1: float
+        后期净值数据
+    method: string or np.array like
+        收益计算方法，可选有[plain, log]
+
+    Return
+    ------
+    r: float
+    '''
+    validation_checker(['plain', 'log'])(method)
+    if method == 'plain':
+        return r1 / r0 - 1
+    else:
+        return np.log(r1) - np.log(r0)
+
+
 def transform_return_frequency(raw_ret, freq, method='plain'):
     '''
     转换收益的频率
@@ -307,7 +331,7 @@ def total_return(nav, bnav, method='plain'):
         return (nav.iloc[-1] / nav.iloc[0] - 1, )
 
 
-def comparable_return(nav, bnav, freq=250, method='plain'):
+def compounded_return(nav, bnav, freq=250, method='plain'):
     '''
     可比收益，即将不同频率的数据换算到同一频率后得到的收益，例如将收益年化
 
@@ -333,10 +357,7 @@ def comparable_return(nav, bnav, freq=250, method='plain'):
     '''
     tret = total_return(nav, bnav, method)[0]
     period_len = len(nav) - 1
-    if method == 'log':
-        return (transform_return_frequency(tret, freq / period_len, method), )
-    else:
-        return (transform_return_frequency(tret, freq / period_len, method), )
+    return (transform_return_frequency(tret, freq / period_len, method), )
 
 
 def comparable_vol(nav, bnav, freq=250, method='plain'):
@@ -548,8 +569,8 @@ def raw_alpha(nav, bnav, rf_rate=0., freq=250, method='plain'):
     -----
     alpha = comparable_ret - transed_rf_rate - raw_beta*(comparable_ret_benchmark - rf_rate)
     '''
-    comparable_ret = comparable_return(nav, bnav, freq, method)[0]
-    comparable_ret_benchmark = comparable_return(bnav, bnav, freq, method)[0]
+    comparable_ret = compounded_return(nav, bnav, freq, method)[0]
+    comparable_ret_benchmark = compounded_return(bnav, bnav, freq, method)[0]
     rawbeta = raw_beta(nav, bnav, method)[0]
     transed_rf_rate = transform_return_frequency(rf_rate, freq, method)
     return (comparable_ret - transed_rf_rate - rawbeta * (comparable_ret_benchmark - transed_rf_rate), )
@@ -581,9 +602,7 @@ def info_ratio(nav, bnav, freq=250, method='plain'):
     ret = nav2ret(nav, method)
     ret_benchmark = nav2ret(bnav, method)
     excess_ret = ret - ret_benchmark
-    comparable_excess_ret = comparable_return(ret2nav(excess_ret, method), None)[0]
-    comparable_excess_vol = comparable_vol(ret2nav(excess_ret, method), None, freq, method)[0]
-    return (comparable_excess_ret / comparable_excess_vol, )
+    return (np.mean(excess_ret) / np.std(excess_ret), )
 
 
 def sharp_ratio(nav, bnav=None, freq=250, method='plain', *, rf_rate=0.):
@@ -649,9 +668,39 @@ def oneside_vol(nav, bnav, freq=250, method='plain', threshold=0., direction=-1)
     return (np.sqrt(valid_ret.dot(valid_ret) * freq / len(nav)), )
 
 
-def sortino_ratio(nav, bnav, freq=250, method='plain', rf_rate=0., threshold=None):
+def sortino_ratio(nav, bnav, freq=250, method='plain', threshold=0.):
     '''
     索提诺比率
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    freq: int, default 250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+    method: string, default 'plain'
+        计算收益率的方法，可选有[log, plain]
+    threshold: float, default 0.
+        下行波动率的识别阈值
+    Return
+    ------
+    sr: (sr, )
+
+    Notes
+    -----
+    sr = (compounded_ret(excess_ret) - threshold) / downside_vol
+    '''
+    excess_ret = compounded_return(nav, bnav, freq, method) - \
+        transform_return_frequency(threshold, freq, method)
+    ds_vol = oneside_vol(nav, bnav, freq, method, threshold, -1)[0]
+    return (excess_ret / ds_vol, )
+
+
+def sdr_sharp_ratio(nav, bnav, freq=250, method='plain', rf_rate=0., threshold=None):
+    '''
+    对称下行风险夏普比率，基本与索提诺比率的计算方法相同
 
     Parameter
     ---------
@@ -674,15 +723,14 @@ def sortino_ratio(nav, bnav, freq=250, method='plain', rf_rate=0., threshold=Non
 
     Notes
     -----
-    sr = comparable_ret(excess_ret) / downside_vol
+    sdr_sr = (compounded_ret(excess_ret) - rf_rate)/ (2*downside_vol)
     '''
-    ret = nav2ret(nav, method)
-    excess_ret = ret - rf_rate
-    cpr_ret = comparable_return(ret2nav(excess_ret, method), bnav, freq, method)[0]
     if threshold is None:
         threshold = rf_rate
-    ds_vol = oneside_vol(nav, bnav, freq, method, threshold, -1)[0]
-    return (cpr_ret / ds_vol, )
+    excess_ret = compounded_return(nav, bnav, freq, method) -\
+        transform_return_frequency(rf_rate, freq, method)
+    ds_vol = 2 * oneside_vol(nav, bnav, freq, method, threshold, -1)[0]
+    return (excess_ret / ds_vol, )
 
 
 def max_gl(nav, bnav, method='plain', window=20, gl_flag=1, excess_ret_flag=False):
@@ -700,7 +748,7 @@ def max_gl(nav, bnav, method='plain', window=20, gl_flag=1, excess_ret_flag=Fals
     window: pandas.Series
         收益或损失的计算窗口长度
     gl_flag: int, default 1
-        标记计算收益还是损失，1表示收益，-1表示损失
+        标记计算收益还是损失，1表示收益，- 1表示损失
     er_flag: boolean, default False
         是否以超额数据为基础计算
 
@@ -778,10 +826,135 @@ def period_ret(nav, bnav, period_identifier, method='plain', excess_ret_flag=Fal
     return (period_end_ret, )
 
 
+def gpr(nav, bnav, period_identifier, method='plain'):
+    '''
+    收益亏损比率
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    period_identifier: string
+        对时间区间进行识别的字符串，例如'%Y'表示以年为单位，'%Y-%m'表示以月为单位
+    method: string, default 'plain'
+        收益计算方法，可选的有[plain, log]
+
+    Return
+    ------
+    res: (gpr, )
+
+    Notes
+    -----
+    gpr被定义为月度收益之和除以月度亏损的绝对值之和，如果没有负收益，返回INF
+    '''
+    p_ret = period_ret(nav, bnav, period_identifier, method=method)[0]
+    pos_sum = np.sum(p_ret.loc[p_ret >= 0])
+    neg_sum = np.sum(p_ret.loc[p_ret < 0])
+    if np.isclose(neg_sum, 0):
+        return (np.inf, )
+    else:
+        return (pos_sum / np.abs(neg_sum), )
+
+
+def mar_ratio(nav, bnav, freq=250, method='plain', retain_tail=1000):
+    '''
+    MAR比率，即复合收益率除以最大回撤
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    freq: int, default 250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+    method: string, default 'plain'
+        收益计算方式，可选有[plain, log]
+    retain_tail: int, default 1000
+        如果数据过长，在计算过程中将剔除早期数据，该参数为用于计算的数据的最大长度
+
+    Return
+    ------
+    mar: (mar, )
+    '''
+    if len(nav) > retain_tail and retain_tail > 0:
+        nav = normalize_nav(nav.iloc[-retain_tail:])
+    mdd = max_drawndown(nav, bnav)
+    ret = compounded_return(nav, bnav, freq, method)
+    return (ret / mdd, )
+
+
+def rrr(nav, bnav, period_identifier, freq=250, method='plain'):
+    '''
+    收益回撤比率
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    period_identifier: string
+        对时间区间进行识别的字符串，例如'%Y'表示以年为单位，'%Y-%m'表示以月为单位，以区间第一个交易日作为区间代表
+    freq: int, default 250
+        策略净值的频率，即低频数据相对于高频数据的时间倍数，例如一般一年约有250个交易日，则日频数据计算年化数据的频率为250
+    method: string, default 'plain'
+        收益计算方式，可选有[plain, log]
+
+    Return
+    ------
+    rrr: (rrr, )
+
+    Notes
+    -----
+    rrr等于复合收益率除以平均最大回撤
+    任意一个时间点的最大回撤等于二者的最大值：前最高点到当前月份的损失，当前点到未来最低点的损失
+    '''
+    cum_high = nav.cummax()
+    cum_low = nav.iloc[::-1].cummin().iloc[::-1]
+    pre_max_loss = cal_return(cum_high, nav, method)
+    post_max_loss = cal_return(nav, cum_low, method)
+    max_loss = pd.Series(np.min([pre_max_loss, post_max_loss], axis=0), index=nav.index)
+    period_start_max_loss = max_loss.groupby(lambda x: x.strftime(period_identifier)).head(1)
+    ret = compounded_return(nav, bnav, freq, method)
+    return (ret / np.mean(period_start_max_loss), )
+
+
+def tail_ratio(nav, bnav, method='plain', q=0.1):
+    '''
+    尾部比率，即给定一个阈值，以此阈值作为分位数定义左右尾，计算尾部收益的平均收益率的比
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    method: string, default 'plain'
+        收益计算方式，可选有[plain, log]
+    q: float, default 0.1
+        尾部识别阈值，必须小于0.5
+
+    Return
+    ------
+    tr: (tr, )
+    '''
+    if q >= 0.5 or q <= 0:
+        raise ValueError('Invalid q parameter, it should in (0, 0.5)')
+    ret = nav2ret(nav, method)
+    high_qtl = ret.quantile(1 - q)
+    low_qtl = ret.quantile(q)
+    high_mean = np.mean(ret.loc[ret >= high_qtl])
+    low_mean = np.abs(np.mean(ret.loc[ret <= low_qtl]))
+    return (high_mean / low_mean, )
+
+
 # --------------------------------------------------------------------------------------------------
 # 默认指标计算配置
 DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
-                      'annualized_return': Indicator(comparable_return),
+                      'annualized_return': Indicator(compounded_return),
                       'annualized_vol': Indicator(comparable_vol),
                       'max_drawndown': Indicator(max_drawndown),
                       'max_drawndown_duration': Indicator(max_drawndown_duration),
@@ -800,5 +973,7 @@ DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'return_skew': Indicator(partial(ret_statistics, func=lambda x: (sp_stats.skew(x), ))),
                       'return_kurtosis': Indicator(partial(ret_statistics, func=lambda x: (sp_stats.kurtosis(x), ))),
                       'yearly_return': Indicator(partial(period_ret, period_identifier='%Y')),
-                      'monthly_return': Indicator(partial(period_ret, period_identifier='%Y-%m'))}
+                      'monthly_return': Indicator(partial(period_ret, period_identifier='%Y-%m')),
+                      'monthly_gpr': Indicator(partial(gpr, period_identifier='%Y-%m')),
+                      'mar_ratio': Indicator(mar_ratio)}
 general_iae_factory = IAEFactory(DEFAULT_IAE_CONFIG)
