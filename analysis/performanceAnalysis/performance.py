@@ -881,8 +881,8 @@ def mar_ratio(nav, bnav, freq=250, method='plain', retain_tail=1000):
     '''
     if len(nav) > retain_tail and retain_tail > 0:
         nav = normalize_nav(nav.iloc[-retain_tail:])
-    mdd = max_drawndown(nav, bnav)
-    ret = compounded_return(nav, bnav, freq, method)
+    mdd = max_drawndown(nav, bnav)[0]
+    ret = compounded_return(nav, bnav, freq, method)[0]
     return (ret / mdd, )
 
 
@@ -918,8 +918,8 @@ def rrr(nav, bnav, period_identifier, freq=250, method='plain'):
     post_max_loss = cal_return(nav, cum_low, method)
     max_loss = pd.Series(np.min([pre_max_loss, post_max_loss], axis=0), index=nav.index)
     period_start_max_loss = max_loss.groupby(lambda x: x.strftime(period_identifier)).head(1)
-    ret = compounded_return(nav, bnav, freq, method)
-    return (ret / np.mean(period_start_max_loss), )
+    ret = compounded_return(nav, bnav, freq, method)[0]
+    return (ret / np.abs(np.mean(period_start_max_loss)), )
 
 
 def tail_ratio(nav, bnav, method='plain', q=0.1):
@@ -970,10 +970,14 @@ DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'sortino_ratio': Indicator(sortino_ratio),
                       'max_rolling_gain': Indicator(partial(max_gl, gl_flag=1)),
                       'max_rolling_loss': Indicator(partial(max_gl, gl_flag=-1)),
-                      'return_skew': Indicator(partial(ret_statistics, func=lambda x: (sp_stats.skew(x), ))),
-                      'return_kurtosis': Indicator(partial(ret_statistics, func=lambda x: (sp_stats.kurtosis(x), ))),
+                      'return_skew': Indicator(partial(ret_statistics,
+                                                       func=lambda x: (sp_stats.skew(x), ))),
+                      'return_kurtosis': Indicator(partial(ret_statistics,
+                                                           func=lambda x: (sp_stats.kurtosis(x), ))),
                       'yearly_return': Indicator(partial(period_ret, period_identifier='%Y')),
                       'monthly_return': Indicator(partial(period_ret, period_identifier='%Y-%m')),
-                      'monthly_gpr': Indicator(partial(gpr, period_identifier='%Y-%m')),
-                      'mar_ratio': Indicator(mar_ratio)}
+                      'monthly_gain_loss_ratio': Indicator(partial(gpr, period_identifier='%Y-%m')),
+                      'mar_ratio': Indicator(mar_ratio),
+                      'return2drawndown_ratio': Indicator(partial(rrr, period_identifier='%Y-%m')),
+                      'tail_ratio': Indicator(tail_ratio)}
 general_iae_factory = IAEFactory(DEFAULT_IAE_CONFIG)
