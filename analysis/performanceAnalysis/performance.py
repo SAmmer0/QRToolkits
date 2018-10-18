@@ -321,14 +321,14 @@ def total_return(nav, bnav, method='plain'):
 
     Return
     ------
-    ret: tuple(ret, )
+    ret: float
     '''
     validation_checker(['log', 'plain'])(method)
     if method == 'log':
         nav = np.log(nav)
-        return (nav.iloc[-1] - nav.iloc[0], )
+        return nav.iloc[-1] - nav.iloc[0]
     else:
-        return (nav.iloc[-1] / nav.iloc[0] - 1, )
+        return nav.iloc[-1] / nav.iloc[0] - 1
 
 
 def compounded_return(nav, bnav, freq=250, method='plain'):
@@ -348,16 +348,16 @@ def compounded_return(nav, bnav, freq=250, method='plain'):
 
     Return
     ------
-    ret: tuple(ret, )
+    ret: float
 
     Notes
     -----
     plain模式下年化收益的计算方式为 ret = (1 + total_ret)**(freq/len) - 1
     log模式下年化收益的计算方式为 ret = log_total_ret * freq / len
     '''
-    tret = total_return(nav, bnav, method)[0]
+    tret = total_return(nav, bnav, method)
     period_len = len(nav) - 1
-    return (transform_return_frequency(tret, freq / period_len, method), )
+    return transform_return_frequency(tret, freq / period_len, method)
 
 
 def comparable_vol(nav, bnav, freq=250, method='plain'):
@@ -377,7 +377,7 @@ def comparable_vol(nav, bnav, freq=250, method='plain'):
 
     Return
     ------
-    vol: tuple(vol, )
+    vol: float
 
     Notes
     -----
@@ -387,7 +387,7 @@ def comparable_vol(nav, bnav, freq=250, method='plain'):
     rets = nav2ret(nav, method)
     init_vol = np.std(rets)
     init_ret = np.mean(rets)
-    return (sqrt((init_vol**2 + (1 + init_ret)**2)**freq - (1 + init_ret)**(2 * freq)), )
+    return sqrt((init_vol**2 + (1 + init_ret)**2)**freq - (1 + init_ret)**(2 * freq))
 
 
 def max_drawndown(nav, bnav):
@@ -452,7 +452,7 @@ def rolling_drawndown(nav, bnav, window=250):
 
     Return
     ------
-    out: (pandas.Series, )
+    out: pandas.Series
     '''
     rolling_max = nav.rolling(window, min_periods=1).max()
     out = nav / rolling_max - 1
@@ -478,7 +478,7 @@ def rolling_comparable_return(nav, bnav, freq=250, method='plain', cut_tail=30):
 
     Return
     ------
-    out: (pands.Series, )
+    out: pandas.Series
     '''
     validation_checker(['plain', 'log'])(method)
     if freq <= 0 or not isinstance(freq, int):
@@ -491,7 +491,7 @@ def rolling_comparable_return(nav, bnav, freq=250, method='plain', cut_tail=30):
         ret = (nav.iloc[-1] / valid_nav)**period_time - 1
     else:
         ret = (np.log(nav.iloc[-1]) - np.log(valid_nav)) * period_time
-    return (ret, )
+    return ret
 
 
 def rolling_past_return(nav, bnav, period_identifier, window, method='plain'):
@@ -513,7 +513,7 @@ def rolling_past_return(nav, bnav, period_identifier, window, method='plain'):
 
     Return
     ------
-    ret: (pandas.Series, )
+    ret: pandas.Series
         收益由滚动窗口内最后一期与第一期的数据计算得到
     '''
     valid_nav = nav.groupby(lambda x: x.strftime(period_identifier)).tail(1)
@@ -539,11 +539,11 @@ def win_rate(nav, bnav, threshold=0., method='plain'):
 
     Return
     ------
-    wr: (win_rate, )
+    wr: float
     '''
     ret = nav2ret(nav, method)
     win_count = (ret >= threshold).sum()
-    return (win_count / len(ret))
+    return win_count / len(ret)
 
 
 def raw_beta(nav, bnav, method='plain'):
@@ -561,7 +561,7 @@ def raw_beta(nav, bnav, method='plain'):
 
     Return
     ------
-    beta: (beta, )
+    beta: float
 
     Notes
     -----
@@ -569,7 +569,7 @@ def raw_beta(nav, bnav, method='plain'):
     '''
     ret = nav2ret(nav, method)
     ret_benchmark = nav2ret(bnav, method)
-    return (np.cov(ret, ret_benchmark)[0][1] / np.var(ret_benchmark), )
+    return np.cov(ret, ret_benchmark)[0][1] / np.var(ret_benchmark)
 
 
 def raw_alpha(nav, bnav, rf_rate=0., freq=250, method='plain'):
@@ -591,15 +591,15 @@ def raw_alpha(nav, bnav, rf_rate=0., freq=250, method='plain'):
 
     Return
     ------
-    alpha: (alpha, )
+    alpha: float
 
     Notes
     -----
     alpha = comparable_ret - transed_rf_rate - raw_beta*(comparable_ret_benchmark - rf_rate)
     '''
-    comparable_ret = compounded_return(nav, bnav, freq, method)[0]
-    comparable_ret_benchmark = compounded_return(bnav, bnav, freq, method)[0]
-    rawbeta = raw_beta(nav, bnav, method)[0]
+    comparable_ret = compounded_return(nav, bnav, freq, method)
+    comparable_ret_benchmark = compounded_return(bnav, bnav, freq, method)
+    rawbeta = raw_beta(nav, bnav, method)
     transed_rf_rate = transform_return_frequency(rf_rate, freq, method)
     return (comparable_ret - transed_rf_rate - rawbeta * (comparable_ret_benchmark - transed_rf_rate), )
 
@@ -621,7 +621,7 @@ def info_ratio(nav, bnav, freq=250, method='plain'):
 
     Return
     ------
-    infor: (infor, )
+    infor: float
 
     Notes
     -----
@@ -630,7 +630,7 @@ def info_ratio(nav, bnav, freq=250, method='plain'):
     ret = nav2ret(nav, method)
     ret_benchmark = nav2ret(bnav, method)
     excess_ret = ret - ret_benchmark
-    return (np.mean(excess_ret) / np.std(excess_ret), )
+    return np.mean(excess_ret) / np.std(excess_ret)
 
 
 def sharp_ratio(nav, bnav=None, freq=250, method='plain', *, rf_rate=0.):
@@ -652,7 +652,7 @@ def sharp_ratio(nav, bnav=None, freq=250, method='plain', *, rf_rate=0.):
 
     Return
     ------
-    sr: (sr, )
+    sr: float
 
     Notes
     -----
@@ -683,7 +683,7 @@ def oneside_vol(nav, bnav, freq=250, method='plain', threshold=0., direction=-1)
 
     Return
     ------
-    dv: (dv, )
+    dv: float
 
     Notes
     -----
@@ -693,7 +693,7 @@ def oneside_vol(nav, bnav, freq=250, method='plain', threshold=0., direction=-1)
     ret = nav2ret(nav, method)
     valid_ret = ret - threshold
     valid_ret.loc[direction * valid_ret <= 0] = 0
-    return (np.sqrt(valid_ret.dot(valid_ret) * freq / len(nav)), )
+    return np.sqrt(valid_ret.dot(valid_ret) * freq / len(nav))
 
 
 def sortino_ratio(nav, bnav, freq=250, method='plain', threshold=0.):
@@ -714,7 +714,7 @@ def sortino_ratio(nav, bnav, freq=250, method='plain', threshold=0.):
         下行波动率的识别阈值
     Return
     ------
-    sr: (sr, )
+    sr: float
 
     Notes
     -----
@@ -722,8 +722,8 @@ def sortino_ratio(nav, bnav, freq=250, method='plain', threshold=0.):
     '''
     excess_ret = compounded_return(nav, bnav, freq, method) - \
         transform_return_frequency(threshold, freq, method)
-    ds_vol = oneside_vol(nav, bnav, freq, method, threshold, -1)[0]
-    return (excess_ret / ds_vol, )
+    ds_vol = oneside_vol(nav, bnav, freq, method, threshold, -1)
+    return excess_ret / ds_vol
 
 
 def sdr_sharp_ratio(nav, bnav, freq=250, method='plain', rf_rate=0., threshold=None):
@@ -747,7 +747,7 @@ def sdr_sharp_ratio(nav, bnav, freq=250, method='plain', rf_rate=0., threshold=N
 
     Return
     ------
-    sr: (sr, )
+    sr: float
 
     Notes
     -----
@@ -757,8 +757,8 @@ def sdr_sharp_ratio(nav, bnav, freq=250, method='plain', rf_rate=0., threshold=N
         threshold = rf_rate
     excess_ret = compounded_return(nav, bnav, freq, method) -\
         transform_return_frequency(rf_rate, freq, method)
-    ds_vol = 2 * oneside_vol(nav, bnav, freq, method, threshold, -1)[0]
-    return (excess_ret / ds_vol, )
+    ds_vol = 2 * oneside_vol(nav, bnav, freq, method, threshold, -1)
+    return excess_ret / ds_vol
 
 
 def max_gl(nav, bnav, method='plain', window=20, gl_flag=1, excess_ret_flag=False):
@@ -811,7 +811,7 @@ def ret_statistics(nav, bnav, func, method='plain'):
 
     Return
     ------
-    stats: tuple
+    stats: undefined
     '''
     ret = nav2ret(nav, method)
     return func(ret)
@@ -836,7 +836,7 @@ def period_ret(nav, bnav, period_identifier, method='plain', excess_ret_flag=Fal
 
     Return
     ------
-    rets: (pandas.Series, )
+    rets: pandas.Series
     '''
     def cal_ret(v):
         v = normalize_nav(v)
@@ -851,7 +851,7 @@ def period_ret(nav, bnav, period_identifier, method='plain', excess_ret_flag=Fal
     if excess_ret_flag:
         period_end_bret = cal_ret(bnav)
         period_end_ret = period_end_ret - period_end_bret
-    return (period_end_ret, )
+    return period_end_ret
 
 
 def gpr(nav, bnav, period_identifier, method='plain'):
@@ -871,19 +871,19 @@ def gpr(nav, bnav, period_identifier, method='plain'):
 
     Return
     ------
-    res: (gpr, )
+    res: float
 
     Notes
     -----
     gpr被定义为月度收益之和除以月度亏损的绝对值之和，如果没有负收益，返回INF
     '''
-    p_ret = period_ret(nav, bnav, period_identifier, method=method)[0]
+    p_ret = period_ret(nav, bnav, period_identifier, method=method)
     pos_sum = np.sum(p_ret.loc[p_ret >= 0])
     neg_sum = np.sum(p_ret.loc[p_ret < 0])
     if np.isclose(neg_sum, 0):
-        return (np.inf, )
+        return np.inf
     else:
-        return (pos_sum / np.abs(neg_sum), )
+        return pos_sum / np.abs(neg_sum)
 
 
 def mar_ratio(nav, bnav, freq=250, method='plain', retain_tail=1000):
@@ -905,13 +905,13 @@ def mar_ratio(nav, bnav, freq=250, method='plain', retain_tail=1000):
 
     Return
     ------
-    mar: (mar, )
+    mar: float
     '''
     if len(nav) > retain_tail and retain_tail > 0:
         nav = normalize_nav(nav.iloc[-retain_tail:])
     mdd = np.abs(max_drawndown(nav, bnav)[0])
-    ret = compounded_return(nav, bnav, freq, method)[0]
-    return (ret / mdd, )
+    ret = compounded_return(nav, bnav, freq, method)
+    return ret / mdd
 
 
 def duc2(nav, bnav, method='plain'):
@@ -929,7 +929,7 @@ def duc2(nav, bnav, method='plain'):
 
     Return
     ------
-    duc: (duc, )
+    duc: pandas.Series
 
     Notes
     -----
@@ -940,7 +940,7 @@ def duc2(nav, bnav, method='plain'):
     pre_max_loss = cal_return(cum_high, nav, method)
     post_max_loss = cal_return(nav, cum_low, method)
     max_loss = pd.Series(np.min([pre_max_loss, post_max_loss], axis=0), index=nav.index)
-    return (max_loss, )
+    return max_loss
 
 
 def rrr(nav, bnav, period_identifier, freq=250, method='plain'):
@@ -962,17 +962,17 @@ def rrr(nav, bnav, period_identifier, freq=250, method='plain'):
 
     Return
     ------
-    rrr: (rrr, )
+    rrr: float
 
     Notes
     -----
     rrr等于复合收益率除以平均最大回撤
     任意一个时间点的最大回撤等于二者的最大值：前最高点到当前月份的损失，当前点到未来最低点的损失
     '''
-    max_loss_series = duc2(nav, bnav, method)[0]
+    max_loss_series = duc2(nav, bnav, method)
     period_start_max_loss = max_loss_series.groupby(lambda x: x.strftime(period_identifier)).head(1)
-    ret = compounded_return(nav, bnav, freq, method)[0]
-    return (ret / np.abs(np.mean(period_start_max_loss)), )
+    ret = compounded_return(nav, bnav, freq, method)
+    return ret / np.abs(np.mean(period_start_max_loss))
 
 
 def tail_ratio(nav, bnav, method='plain', q=0.1):
@@ -992,7 +992,7 @@ def tail_ratio(nav, bnav, method='plain', q=0.1):
 
     Return
     ------
-    tr: (tr, )
+    tr: tr
     '''
     if q >= 0.5 or q <= 0:
         raise ValueError('Invalid q parameter, it should in (0, 0.5)')
@@ -1001,7 +1001,7 @@ def tail_ratio(nav, bnav, method='plain', q=0.1):
     low_qtl = ret.quantile(q)
     high_mean = np.mean(ret.loc[ret >= high_qtl])
     low_mean = np.abs(np.mean(ret.loc[ret <= low_qtl]))
-    return (high_mean / low_mean, )
+    return high_mean / low_mean
 
 
 # --------------------------------------------------------------------------------------------------
@@ -1018,6 +1018,7 @@ DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'beta': Indicator(raw_beta),
                       'info_ratio': Indicator(info_ratio),
                       'sharp_ratio': Indicator(sharp_ratio),
+                      'sdr_sharp_ratio': Indicator(sdr_sharp_ratio),
                       'downside_vol': Indicator(partial(oneside_vol, direction=-1)),
                       'upside_vol': Indicator(partial(oneside_vol, direction=1)),
                       'sortino_ratio': Indicator(sortino_ratio),
