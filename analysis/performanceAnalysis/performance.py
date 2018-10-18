@@ -410,7 +410,7 @@ def max_drawndown(nav, bnav):
     mdd = dd.max()
     mdd_end = dd.idxmax()
     mdd_start = nav[nav == cum_max[mdd_end]].index[0]
-    return mdd, mdd_start, mdd_end
+    return -mdd, mdd_start, mdd_end
 
 
 def max_drawndown_duration(nav, bnav):
@@ -455,7 +455,7 @@ def rolling_drawndown(nav, bnav, window=250):
     out: (pandas.Series, )
     '''
     rolling_max = nav.rolling(window, min_periods=1).max()
-    out = 1 - nav / rolling_max
+    out = nav / rolling_max - 1
     return out
 
 
@@ -492,6 +492,34 @@ def rolling_comparable_return(nav, bnav, freq=250, method='plain', cut_tail=30):
     else:
         ret = (np.log(nav.iloc[-1]) - np.log(valid_nav)) * period_time
     return (ret, )
+
+
+def rolling_past_return(nav, bnav, period_identifier, window, method='plain'):
+    '''
+    滚动计算过往收益
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    period_identifier: string
+        对时间区间进行识别的字符串，例如'%Y'表示以年为单位，'%Y-%m'表示以月为单位，以区间第一个交易日作为区间代表
+    window: int
+        滚动计算收益的窗口长度
+    method: string, default 'plain'
+        收益计算方式，可选为[plain, log]
+
+    Return
+    ------
+    ret: (pandas.Series, )
+        收益由滚动窗口内最后一期与第一期的数据计算得到
+    '''
+    valid_nav = nav.groupby(lambda x: x.strftime(period_identifier)).tail(1)
+    ret = valid_nav.rolling(window, min_periods=window).\
+        apply(lambda x: cal_return(x[0], x[-1], method)).dropna()
+    return ret
 
 
 def win_rate(nav, bnav, threshold=0., method='plain'):
@@ -881,9 +909,38 @@ def mar_ratio(nav, bnav, freq=250, method='plain', retain_tail=1000):
     '''
     if len(nav) > retain_tail and retain_tail > 0:
         nav = normalize_nav(nav.iloc[-retain_tail:])
-    mdd = max_drawndown(nav, bnav)[0]
+    mdd = np.abs(max_drawndown(nav, bnav)[0])
     ret = compounded_return(nav, bnav, freq, method)[0]
     return (ret / mdd, )
+
+
+def duc2(nav, bnav, method='plain'):
+    '''
+    二维回撤
+
+    Parameter
+    ---------
+    nav: pandas.Series
+        策略净值
+    bnav: pandas.Series
+        基准净值
+    method: string, default 'plain'
+        收益计算方式，可选有[plain, log]
+
+    Return
+    ------
+    duc: (duc, )
+
+    Notes
+    -----
+    任何一个时间点的二维回撤等于前高值到当前的损失与当前到往后低值损失的较大者
+    '''
+    cum_high = nav.cummax()
+    cum_low = nav.iloc[::-1].cummin().iloc[::-1]
+    pre_max_loss = cal_return(cum_high, nav, method)
+    post_max_loss = cal_return(nav, cum_low, method)
+    max_loss = pd.Series(np.min([pre_max_loss, post_max_loss], axis=0), index=nav.index)
+    return (max_loss, )
 
 
 def rrr(nav, bnav, period_identifier, freq=250, method='plain'):
@@ -912,12 +969,8 @@ def rrr(nav, bnav, period_identifier, freq=250, method='plain'):
     rrr等于复合收益率除以平均最大回撤
     任意一个时间点的最大回撤等于二者的最大值：前最高点到当前月份的损失，当前点到未来最低点的损失
     '''
-    cum_high = nav.cummax()
-    cum_low = nav.iloc[::-1].cummin().iloc[::-1]
-    pre_max_loss = cal_return(cum_high, nav, method)
-    post_max_loss = cal_return(nav, cum_low, method)
-    max_loss = pd.Series(np.min([pre_max_loss, post_max_loss], axis=0), index=nav.index)
-    period_start_max_loss = max_loss.groupby(lambda x: x.strftime(period_identifier)).head(1)
+    max_loss_series = duc2(nav, bnav, method)[0]
+    period_start_max_loss = max_loss_series.groupby(lambda x: x.strftime(period_identifier)).head(1)
     ret = compounded_return(nav, bnav, freq, method)[0]
     return (ret / np.abs(np.mean(period_start_max_loss)), )
 
@@ -970,6 +1023,8 @@ DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'sortino_ratio': Indicator(sortino_ratio),
                       'max_rolling_gain': Indicator(partial(max_gl, gl_flag=1)),
                       'max_rolling_loss': Indicator(partial(max_gl, gl_flag=-1)),
+                      'rolling_12m_return': Indicator(partial(rolling_past_return,
+                                                              period_identifier='%Y-%m', window=13)),
                       'return_skew': Indicator(partial(ret_statistics,
                                                        func=lambda x: (sp_stats.skew(x), ))),
                       'return_kurtosis': Indicator(partial(ret_statistics,
@@ -979,5 +1034,6 @@ DEFAULT_IAE_CONFIG = {'total_return': Indicator(total_return),
                       'monthly_gain_loss_ratio': Indicator(partial(gpr, period_identifier='%Y-%m')),
                       'mar_ratio': Indicator(mar_ratio),
                       'return2drawndown_ratio': Indicator(partial(rrr, period_identifier='%Y-%m')),
-                      'tail_ratio': Indicator(tail_ratio)}
+                      'tail_ratio': Indicator(tail_ratio),
+                      'duc2': Indicator(duc2)}
 general_iae_factory = IAEFactory(DEFAULT_IAE_CONFIG)
